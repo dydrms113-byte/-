@@ -654,11 +654,11 @@ function renderTable(data){
 
     data.forEach(r => {
         const rid = r[0];
-        const ma = r[32] || [];
+        const ma = r[31] || [];   // ✅ 월별 데이터
         let h = "<tr>";
 
         h += "<td class='sc c0'><div class='row-actions'>";
-        h += "<a href='/edit/"+rid+"' class='icon-btn icon-edit' title='수정' onclick='return confirm(\"수정하시겠습니까?\")'>✏️</a>";
+        h += "<a href='/edit/"+rid+"' class='icon-btn icon-edit' title='수정'>✏️</a>";
         h += "<button class='icon-btn icon-del' title='삭제' onclick='deleteRow("+rid+")'>🗑️</button>";
         h += "</div></td>";
 
@@ -673,31 +673,32 @@ function renderTable(data){
         h += "<td>"+f(r[10])+"</td><td>"+f(r[11])+"</td>";
         h += "<td class='left'>"+f(r[12])+"</td>";
 
-        h += "<td class='"+nc(r[13])+"'>"+f(r[13])+"</td>";
-        h += "<td class='"+nc(r[14])+"'>"+f(r[14])+"</td>";
-        h += "<td class='"+nc(r[15])+"'>"+f(r[15])+"</td>";
-        h += "<td class='"+nc(r[16])+"'>"+f(r[16])+"</td>";
+        h += "<td>"+f(r[13])+"</td>";
+        h += "<td>"+f(r[14])+"</td>";
+        h += "<td>"+f(r[15])+"</td>";
+        h += "<td>"+f(r[16])+"</td>";
 
-        h += "<td class='"+nc(r[17])+"'>"+f(r[17])+"</td>";
-        for(let i=18;i<=26;i++) h+="<td class='"+nc(r[i])+"'>"+f(r[i])+"</td>";
+        h += "<td>"+f(r[17])+"</td>";
+        for(let i=18;i<=26;i++){
+            h += "<td>"+f(r[i])+"</td>";
+        }
+
         h += "<td class='act-cell'>"+f(r[28])+"</td>";
 
-        const rt = r[30]!=="-"&&r[30]!=null? r[30]+"%":"-";
-        const ra = r[31]!=="-"&&r[31]!=null? r[31]+"%":"-";
-        h += "<td class='"+nc(r[30])+"'>"+rt+"</td>";
-        h += "<td class='"+nc(r[31])+"'>"+ra+"</td>";
+        const rt = r[29] != null && r[29] !== "-" ? r[29]+"%" : "-";
+        const ra = r[30] != null && r[30] !== "-" ? r[30]+"%" : "-";
+        h += "<td>"+rt+"</td>";
+        h += "<td>"+ra+"</td>";
         h += "<td><span class='sig "+sig(r)+"'></span></td>";
 
         for(let i=0;i<ma.length;i++){
-            const v = ma[i];
-            const has = v!=null && parseFloat(v)!==0;
-            h += "<td class='"+(has?"mhv":"")+"'>"+( has ? v : "0" )+"</td>";
+            h += "<td>"+(ma[i] || 0)+"</td>";
         }
 
         h += "</tr>";
         out += h;
     });
-    
+
     tb.innerHTML = out;
     document.getElementById("footerInfo").textContent = "총 "+data.length+"건";
 }

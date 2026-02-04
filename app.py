@@ -1,21 +1,52 @@
 from flask import Flask, request, redirect, url_for, render_template_string, jsonify
-import sqlite3
+
+import os
+import json
+from datetime import datetime
+from urllib.parse import urlparse
+
+try:
+    import psycopg2
+except ImportError:
+    psycopg2 = None
 from datetime import datetime
 import os
 import json
 
 app = Flask(__name__)
+import sqlite3
+
+def get_db():
+    database_url = os.environ.get("DATABASE_URL")
+
+    # ✅ Render / PostgreSQL
+    if database_url:
+        if psycopg2 is None:
+            raise Exception("psycopg2가 설치되어 있지 않습니다")
+
+        result = urlparse(database_url)
+        return psycopg2.connect(
+            dbname=result.path[1:],
+            user=result.username,
+            password=result.password,
+            host=result.hostname,
+            port=result.port,
+            sslmode="require"
+        )
+
+    # ✅ 로컬 / SQLite
+    return sqlite3.connect(DB_NAME)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_NAME = os.path.join(BASE_DIR, "data.db")
 
 def init_db():
     print(f"📁 DB 경로: {DB_NAME}")
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_db()
     c = conn.cursor()
     c.execute("""
     CREATE TABLE IF NOT EXISTS investment (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         invest_type TEXT,
         product TEXT,
         corporation TEXT,
@@ -61,7 +92,13 @@ def init_db():
     conn.close()
     print("✅ DB 초기화 완료")
 
-init_db()
+if __name__ == "__main__":
+    init_db()
+    print("=" * 60)
+    print("🚀 Flask 서버 시작")
+    print("📍 주소: http://127.0.0.1:5000")
+    print("=" * 60)
+    app.run(debug=True, host="127.0.0.1", port=5000)
 
 PRODUCTS     = ["키친", "빌트인쿠킹", "리빙", "부품", "ES"]
 CORPORATIONS = ["KR","AI","AT","AZ","EG","IL_N","IL_P","IN_T","MN","MX","MZ","PN","RA","SR","TA","TH","TN","TR","VH","WR"]
@@ -79,9 +116,9 @@ def nz(v, default=0.0):
 def index(row_id=None):
     edit_data = None
     if row_id:
-        conn = sqlite3.connect(DB_NAME)
+        conn = get_db()
         c = conn.cursor()
-        c.execute("SELECT * FROM investment WHERE id = ?", (row_id,))
+        c.execute("SELECT * FROM investment WHERE id = %s", (row_id,))
         edit_data = c.fetchone()
         conn.close()
         if not edit_data:
@@ -97,15 +134,11 @@ def index(row_id=None):
 def save():
     try:
         f = request.form
-        conn = sqlite3.connect(DB_NAME)
+        conn = get_db()
         c = conn.cursor()
-        
+
         row_id = f.get("row_id")
-        
-        print("=" * 50)
-        print("📝 저장 요청")
-        print(f"제품: {f.get('product')}, 법인: {f.get('corporation')}, 투자항목: {f.get('invest_item')}")
-        
+
         values = (
             f.get("invest_type") or "",
             f.get("product") or "",
@@ -136,9 +169,10 @@ def save():
             nz(f.get("saving_total")),
             f.get("activity") or ""
         )
-        
+
         if row_id:
-            c.execute("""UPDATE investment SET
+            c.execute("""
+                UPDATE investment SET
                 invest_type=?,product=?,corporation=?,purpose=?,invest_item=?,
                 order_target=?,order_actual=?,setup_target=?,setup_actual=?,
                 mass_target=?,mass_actual=?,delay_reason=?,
@@ -146,52 +180,65 @@ def save():
                 saving_target=?,saving_actual=?,
                 reduce_1=?,reduce_2=?,reduce_3=?,reduce_4=?,reduce_5=?,
                 reduce_6=?,reduce_7=?,reduce_8=?,reduce_9=?,
-                saving_total=?,activity=? WHERE id=?""", values + (row_id,))
-            c.execute("DELETE FROM investment_monthly WHERE id=?", (row_id,))
+                saving_total=?,activity=?
+                WHERE id=?
+            """, values + (row_id,))
             target_id = int(row_id)
-            print(f"✅ 수정: ID={target_id}")
-        else:
-            c.execute("""INSERT INTO investment (
-                invest_type,product,corporation,purpose,invest_item,
-                order_target,order_actual,setup_target,setup_actual,
-                mass_target,mass_actual,delay_reason,
-                base_amount,order_price_target,order_price_actual,
-                saving_target,saving_actual,
-                reduce_1,reduce_2,reduce_3,reduce_4,reduce_5,
-                reduce_6,reduce_7,reduce_8,reduce_9,
-                saving_total,activity,created_at
-            ) VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?, ?,?,?, ?,?, ?,?,?,?,?, ?,?,?,?, ?,?,?)""",
-            values + (datetime.now().strftime("%Y-%m-%d %H:%M:%S"),))
-            target_id = c.lastrowid
-            print(f"✅ 신규: ID={target_id}")
+
+            c.execute("""
+            INSERT INTO investment (
+                invest_type, product, corporation, purpose, invest_item,
+                order_target, order_actual, setup_target, setup_actual,
+                mass_target, mass_actual, delay_reason,
+                base_amount, order_price_target, order_price_actual,
+                saving_target, saving_actual,
+                reduce_1, reduce_2, reduce_3, reduce_4, reduce_5,
+                reduce_6, reduce_7, reduce_8, reduce_9,
+                saving_total, activity, created_at
+            ) VALUES (
+                %s,%s,%s,%s,%s,
+                %s,%s,%s,%s,
+                %s,%s,%s,
+                %s,%s,%s,
+                %s,%s,
+                %s,%s,%s,%s,%s,
+                %s,%s,%s,%s,
+                %s,%s,%s
+            )
+            RETURNING id
+            """, values + (datetime.now().strftime("%Y-%m-%d %H:%M:%S"),))
+
+            target_id = c.fetchone()[0]
         
-        conn.commit()
-        
-        order_target = f.get("order_target") or ""
-        order_actual = f.get("order_actual") or ""
-        saving_target = nz(f.get("saving_target"))
-        saving_actual = nz(f.get("saving_actual"))
-        
+        # ❌ investment 삭제 제거
+        # c.execute("DELETE FROM investment WHERE id=%s", (row_id,))
+
+        # ✅ 월별 데이터만 초기화
+        c.execute("DELETE FROM investment_monthly WHERE id=%s", (target_id,))
         for ym in MONTHS:
-            t = saving_target if order_target == ym else 0.0
-            a = saving_actual if order_actual == ym else 0.0
-            c.execute("INSERT OR REPLACE INTO investment_monthly VALUES (?,?,?,?)", (target_id, ym, t, a))
-        
+            c.execute(
+                """
+                INSERT INTO investment_monthly (id, year_month, monthly_target, monthly_actual)
+                VALUES (%s,%s,%s,%s)
+                ON CONFLICT (id, year_month)
+                DO NOTHING
+                """,
+                (target_id, ym, 0, 0)
+            )
+
         conn.commit()
         conn.close()
-        print("=" * 50)
-        
         return redirect("/list")
-        
+
     except Exception as e:
-        print(f"❌ 오류: {e}")
+        print("❌ 저장 오류:", e)
         import traceback
         traceback.print_exc()
         return f"저장 오류: {e}", 500
 
 @app.route("/list")
 def list_page():
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_db()
     c = conn.cursor()
     c.execute("SELECT * FROM investment ORDER BY id DESC")
     rows = c.fetchall()
@@ -248,10 +295,10 @@ def list_page():
 
 @app.route("/delete/<int:row_id>", methods=["POST"])
 def delete_row(row_id):
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_db()
     c = conn.cursor()
-    c.execute("DELETE FROM investment WHERE id=?", (row_id,))
-    c.execute("DELETE FROM investment_monthly WHERE id=?", (row_id,))
+    c.execute("DELETE FROM investment WHERE id=%s", (row_id,))
+    c.execute("DELETE FROM investment_monthly WHERE id=%s", (row_id,))
     conn.commit()
     conn.close()
     print(f"🗑️ 삭제: ID={row_id}")

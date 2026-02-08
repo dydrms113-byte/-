@@ -44,9 +44,16 @@ def init_db():
         reduce_9 REAL,
         saving_total REAL,
         activity TEXT,
-        created_at TEXT
+        created_at TEXT,
+        updated_at TEXT
     )
     """)
+    
+    c.execute("PRAGMA table_info(investment)")
+    columns = [col[1] for col in c.fetchall()]
+    if 'updated_at' not in columns:
+        c.execute("ALTER TABLE investment ADD COLUMN updated_at TEXT")
+    
     c.execute("""
     CREATE TABLE IF NOT EXISTS investment_monthly (
         id INTEGER,
@@ -64,7 +71,13 @@ def init_db():
 init_db()
 
 PRODUCTS     = ["키친", "빌트인쿠킹", "리빙", "부품", "ES"]
-CORPORATIONS = ["KR","AI","AT","AZ","EG","IL_N","IL_P","IN_T","MN","MX","MZ","PN","RA","SR","TA","TH","TN","TR","VH","WR"]
+CORPORATIONS = {
+    "키친": ["KR","TR","MN","IN_T","IL_N","IL_P","VH","RA"],
+    "빌트인쿠킹": ["KR","MN","IL_N","MZ","VH"],
+    "리빙": ["KR","PN","TH","VH","IL_N","IL_P","TN","MX","EG","RA"],
+    "ES": ["KR","TA","IL_N","IL_P","TH","SR","AZ","AT","AL"],
+    "부품": ["KR","TA","PN","TR","TH","IL_N","VH","MN"]
+}
 ALL_PURPOSES = ["신규라인", "자동화", "라인 개조", "Overhaul", "신모델 대응", "T/Time 향상", "고장 수리", "안전", "설비 이설", "노후 교체", "설비 개선", "기타"]
 
 MONTHS = [f"{y}-{m:02d}" for y in [2026, 2027] for m in range(1, 13)]
@@ -88,7 +101,7 @@ def index(row_id=None):
             return "데이터를 찾을 수 없습니다.", 404
     return render_template_string(INPUT_TPL,
         products=PRODUCTS, 
-        corporations=CORPORATIONS,
+        corporations_json=json.dumps(CORPORATIONS, ensure_ascii=False),
         all_purposes=ALL_PURPOSES,
         edit_data=edit_data, 
         row_id=row_id)
@@ -101,6 +114,7 @@ def save():
         c = conn.cursor()
         
         row_id = f.get("row_id")
+        now = datetime.now().strftime("%Y-%m-%d %H:%M")
         
         print("=" * 50)
         print("📝 저장 요청")
@@ -146,7 +160,7 @@ def save():
                 saving_target=?,saving_actual=?,
                 reduce_1=?,reduce_2=?,reduce_3=?,reduce_4=?,reduce_5=?,
                 reduce_6=?,reduce_7=?,reduce_8=?,reduce_9=?,
-                saving_total=?,activity=? WHERE id=?""", values + (row_id,))
+                saving_total=?,activity=?,updated_at=? WHERE id=?""", values + (now, row_id))
             c.execute("DELETE FROM investment_monthly WHERE id=?", (row_id,))
             target_id = int(row_id)
             print(f"✅ 수정: ID={target_id}")
@@ -159,9 +173,9 @@ def save():
                 saving_target,saving_actual,
                 reduce_1,reduce_2,reduce_3,reduce_4,reduce_5,
                 reduce_6,reduce_7,reduce_8,reduce_9,
-                saving_total,activity,created_at
-            ) VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?, ?,?,?, ?,?, ?,?,?,?,?, ?,?,?,?, ?,?,?)""",
-            values + (datetime.now().strftime("%Y-%m-%d %H:%M:%S"),))
+                saving_total,activity,created_at,updated_at
+            ) VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?, ?,?,?, ?,?, ?,?,?,?,?, ?,?,?,?, ?,?,?,?)""",
+            values + (now, now))
             target_id = c.lastrowid
             print(f"✅ 신규: ID={target_id}")
         
@@ -214,37 +228,41 @@ def list_page():
         base = r[13] if r[13] else 0
         sav_tgt = r[16] if r[16] else 0
         sav_act = r[17] if r[17] else 0
+        product = r[2] if r[2] else ""
         
-        rate_target = "-"
+        # 제품별 절감률 목표 설정
+        if product == "ES":
+            rate_target = 50
+        else:
+            rate_target = 30
+        
+        # 절감률 실적 계산
         rate_actual = "-"
         if base and base != 0:
-            if sav_tgt:
-                rate_target = round((sav_tgt/base)*100, 1)
             if sav_act:
                 rate_actual = round((sav_act/base)*100, 1)
+            else:
+                rate_actual = 0
         
         r.append(rate_target)
         r.append(rate_actual)
         
-        m_data = monthly_map.get(r[0], {})
-        monthly_arr = []
-        for ym in MONTHS:
-            t, a = m_data.get(ym, (0, 0))
-            monthly_arr.append(t)
-            monthly_arr.append(a)
-        r.append(monthly_arr)
+        # updated_at 또는 created_at 사용
+        timestamp = r[30] if len(r) > 30 and r[30] else r[29]
+        r.append(timestamp)
         
         processed.append(r)
     
     print(f"   처리: {len(processed)}건")
     
-    # JSON으로 안전하게 직렬화
     processed_json = json.dumps(processed, ensure_ascii=False)
     months_json = json.dumps(MONTHS, ensure_ascii=False)
     
     return render_template_string(LIST_TPL, 
         processed_json=processed_json,
-        months_json=months_json)
+        months_json=months_json,
+        corporations_json=json.dumps(CORPORATIONS, ensure_ascii=False),
+        all_purposes_json=json.dumps(ALL_PURPOSES, ensure_ascii=False))
 
 @app.route("/delete/<int:row_id>", methods=["POST"])
 def delete_row(row_id):
@@ -262,196 +280,699 @@ INPUT_TPL = """
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<title>설비투자비한계돌파 실적 기입</title>
+<title>설비투자비 한계돌파 실적 관리 시스템</title>
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Malgun Gothic','맑은 고딕',Arial,sans-serif;font-size:13px;background:#eef2f7;color:#2c3e50;min-height:100vh}
-.top-nav{background:#1a3a5c;color:#fff;padding:11px 24px;display:flex;align-items:center;gap:20px;box-shadow:0 2px 6px rgba(0,0,0,.2)}
-.top-nav h2{font-size:17px;font-weight:600}
-.top-nav a{color:#a8d4f0;text-decoration:none;font-size:13px;transition:color .2s}
-.top-nav a:hover{color:#fff}
-.content{max-width:1340px;margin:22px auto;padding:0 20px}
-.card{background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.08);margin-bottom:16px;overflow:hidden;border:1px solid #dce5ee}
-.card-header{padding:9px 16px;font-weight:700;font-size:13px;color:#fff;display:flex;align-items:center;gap:8px}
-.card-header.blue{background:#1a3a5c}
-.card-header.teal{background:#2e6da4}
-.card-header.green{background:#3d8b5e}
-.card-header.gold{background:#b8860b}
-.card table{width:100%;border-collapse:collapse}
-.card table td,.card table th{border:1px solid #dce5ee;padding:7px 10px;vertical-align:middle}
-.card table th{background:#f0f4f8;font-weight:600;color:#1a3a5c;font-size:12px;text-align:left;white-space:nowrap}
-td.label{background:#eef3f8;font-weight:600;color:#1a3a5c;white-space:nowrap;text-align:left;padding-left:12px;width:105px}
-input[type="text"],input[type="number"],input[type="month"],select,textarea{
-    width:100%;padding:6px 9px;border:1px solid #c8d4df;border-radius:4px;
-    font-size:12.5px;font-family:inherit;background:#fafcfe;
-    transition:border .2s,box-shadow .2s;outline:none
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap');
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
 }
-input:focus,select:focus,textarea:focus{border-color:#2e6da4;box-shadow:0 0 0 2px rgba(46,109,164,.18);background:#fff}
-textarea{resize:vertical;min-height:72px}
-input[readonly]{background:#e8f0f7;font-weight:700;color:#1a3a5c;border-color:#b0c4d8}
-textarea::placeholder{color:#999;font-style:italic}
-textarea:not(:placeholder-shown){color:#2c3e50}
-.reduce-table th{background:#fdf3dc;color:#7a5a00;font-size:11px;text-align:center;padding:5px 4px;min-width:74px}
-.reduce-table td{text-align:center;padding:5px 4px}
-.reduce-table input{min-width:62px;max-width:78px;text-align:center}
-.rn{display:block;font-size:10px;color:#b8860b;font-weight:700;margin-bottom:1px}
-td.sav-actual-cell{background:#eef3f8;font-weight:600;color:#1a3a5c;text-align:left;padding-left:12px;white-space:nowrap;width:105px}
-.btn-area{max-width:1340px;margin:0 auto 28px;padding:0 20px;display:flex;gap:12px;align-items:center}
-.btn-primary{background:#1a3a5c;color:#fff;border:none;padding:10px 32px;border-radius:5px;font-size:14px;font-weight:600;cursor:pointer;transition:background .2s}
-.btn-primary:hover{background:#2e5a8c}
-.btn-secondary{background:#fff;color:#1a3a5c;border:2px solid #1a3a5c;padding:9px 24px;border-radius:5px;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;transition:background .2s,color .2s}
-.btn-secondary:hover{background:#1a3a5c;color:#fff}
+
+body {
+    font-family: 'Noto Sans KR', sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 16px;
+    font-size: 14px;
+}
+
+.header {
+    background: linear-gradient(135deg, #4a5f9d 0%, #5a4a8a 100%);
+    border-radius: 12px;
+    padding: 18px 30px;
+    margin-bottom: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    max-width: 1600px;
+    margin-left: auto;
+    margin-right: auto;
+    margin-bottom: 16px;
+}
+
+.header h1 {
+    color: white;
+    font-size: 22px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.header-right {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.header-btn {
+    background: rgba(255,255,255,0.15);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.3);
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.header-btn:hover {
+    background: rgba(255,255,255,0.25);
+}
+
+.container {
+    max-width: 1600px;
+    margin: 0 auto;
+}
+
+.row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+    margin-bottom: 18px;
+}
+
+.card {
+    background: white;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+}
+
+.card-full {
+    grid-column: 1 / -1;
+}
+
+.card-header {
+    padding: 16px 24px;
+    font-weight: 700;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 3px solid;
+}
+
+.card-header.pink {
+    background: linear-gradient(to bottom, #fce7f3 0%, #fbcfe8 100%);
+    color: #be185d;
+    border-bottom-color: #ec4899;
+}
+
+.card-header.cyan {
+    background: linear-gradient(to bottom, #cffafe 0%, #a5f3fc 100%);
+    color: #0e7490;
+    border-bottom-color: #06b6d4;
+}
+
+.card-header.amber {
+    background: linear-gradient(to bottom, #fef3c7 0%, #fde68a 100%);
+    color: #b45309;
+    border-bottom-color: #f59e0b;
+}
+
+.card-header.blue {
+    background: linear-gradient(to bottom, #dbeafe 0%, #bfdbfe 100%);
+    color: #1e40af;
+    border-bottom-color: #3b82f6;
+}
+
+.card-header.emerald {
+    background: linear-gradient(to bottom, #d1fae5 0%, #a7f3d0 100%);
+    color: #047857;
+    border-bottom-color: #10b981;
+}
+
+.card-header.violet {
+    background: linear-gradient(to bottom, #ede9fe 0%, #ddd6fe 100%);
+    color: #6d28d9;
+    border-bottom-color: #8b5cf6;
+}
+
+.card-body {
+    padding: 24px;
+}
+
+.form-group {
+    margin-bottom: 18px;
+}
+
+.form-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #64748b;
+    margin-bottom: 10px;
+}
+
+.toggle-group {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.toggle-btn {
+    padding: 14px;
+    border: 2px solid #cbd5e1;
+    border-radius: 10px;
+    background: #f1f5f9;
+    text-align: center;
+    font-weight: 600;
+    font-size: 15px;
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.toggle-btn.active {
+    background: #dbeafe;
+    border-color: #3b82f6;
+    color: #1e40af;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+input[type="text"],
+input[type="number"],
+input[type="month"],
+select,
+textarea {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid #cbd5e1;
+    border-radius: 10px;
+    font-size: 15px;
+    font-family: 'Noto Sans KR', sans-serif;
+    background: #f1f5f9;
+    transition: all 0.3s;
+}
+
+input::placeholder {
+    color: #94a3b8;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+    outline: none;
+    border-color: #667eea;
+    background: white;
+    box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
+}
+
+select {
+    cursor: pointer;
+}
+
+textarea {
+    resize: vertical;
+    min-height: 100px;
+    line-height: 1.6;
+}
+
+input[readonly] {
+    background: #f1f5f9;
+    color: #1e40af;
+    font-weight: 700;
+    border: 2px solid #cbd5e1;
+}
+
+.saving-actual-highlight {
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.25);
+    background: #f5f3ff !important;
+    border: 2px solid #c4b5fd !important;
+    position: relative;
+    font-weight: 700;
+}
+
+.saving-actual-highlight::after {
+    content: '✓';
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #8b5cf6;
+    font-weight: 700;
+    font-size: 18px;
+}
+
+.info-box {
+    background: #dbeafe;
+    border-left: 4px solid #3b82f6;
+    padding: 14px 18px;
+    border-radius: 8px;
+    margin-top: 12px;
+    margin-bottom: 12px;
+}
+
+.info-box-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1e40af;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.info-box-text {
+    font-size: 12px;
+    color: #3b82f6;
+    line-height: 1.6;
+}
+
+.table-wrapper {
+    overflow-x: auto;
+    margin-top: 0;
+}
+
+.reduce-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.reduce-table th {
+    background: #f3f4f6;
+    color: #374151;
+    font-size: 12px;
+    padding: 12px 10px;
+    text-align: center;
+    font-weight: 600;
+    border: 1px solid #e5e7eb;
+    white-space: nowrap;
+}
+
+.reduce-table th:first-child {
+    border-radius: 8px 0 0 0;
+}
+
+.reduce-table th:nth-child(2) {
+    background: #dcfce7;
+    color: #065f46;
+    font-weight: 700;
+}
+
+.reduce-table th:last-child {
+    border-radius: 0 8px 0 0;
+}
+
+.reduce-table td {
+    padding: 12px 10px;
+    text-align: center;
+    background: white;
+    border: 1px solid #e5e7eb;
+}
+
+.reduce-table td:first-child {
+    font-weight: 600;
+    color: #374151;
+    background: #f9fafb;
+}
+
+.reduce-table td:nth-child(2) {
+    background: white;
+    border: 1px solid #e5e7eb;
+}
+
+.reduce-table td:nth-child(2) input {
+    background: #f1f5f9;
+    font-weight: 700;
+    color: #065f46;
+    font-size: 15px;
+    border: 2px solid #cbd5e1;
+}
+
+.reduce-table input {
+    max-width: 90px;
+    text-align: center;
+    background: #f1f5f9;
+    padding: 10px;
+    border: 2px solid #cbd5e1;
+    border-radius: 6px;
+}
+
+.reduce-number {
+    display: block;
+    font-size: 11px;
+    color: #9ca3af;
+    font-weight: 700;
+    margin-bottom: 3px;
+}
+
+.activity-section {
+    margin-top: 20px;
+    padding: 20px;
+    background: #f9fafb;
+    border-radius: 10px;
+    border: 1px solid #e5e7eb;
+}
+
+.activity-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 12px;
+}
+
+.button-group {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    margin-top: 28px;
+    padding: 26px;
+    background: white;
+    border-radius: 14px;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    border: none;
+    padding: 16px 48px;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 16px rgba(16,185,129,0.3);
+    transition: all 0.3s;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(16,185,129,0.4);
+}
+
+.btn-secondary {
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+    color: white;
+    border: none;
+    padding: 16px 48px;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 16px rgba(99,102,241,0.3);
+    transition: all 0.3s;
+}
+
+.btn-secondary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(99,102,241,0.4);
+}
 </style>
 </head>
 <body>
 
-<div class="top-nav">
-    <h2>📝 설비투자비한계돌파 실적 기입 {% if row_id %}(수정){% endif %}</h2>
-    <a href="/list">📊 조회 페이지 →</a>
+<div class="header">
+    <h1>📋 설비투자비 한계돌파 실적 관리 시스템</h1>
+    <div class="header-right">
+        <a href="/" class="header-btn">📄 Data 입력 페이지</a>
+        <a href="/list" class="header-btn">📊 투자실적 조회</a>
+    </div>
 </div>
 
-<div class="content">
-<form method="post" action="/save">
-{% if row_id %}<input type="hidden" name="row_id" value="{{ row_id }}">{% endif %}
+<div class="container">
+    <form method="post" action="/save" id="mainForm">
+    {%- if row_id -%}<input type="hidden" name="row_id" value="{{ row_id }}">{%- endif -%}
 
-<div class="card">
-<div class="card-header blue">📌 투자 분류</div>
-<table>
-<tr>
-    <td class="label">투자 유형</td>
-    <td style="width:120px">
-        <select name="invest_type">
-            <option {% if edit_data and edit_data[1]=='확장' %}selected{% endif %}>확장</option>
-            <option {% if edit_data and edit_data[1]=='경상' %}selected{% endif %}>경상</option>
-        </select>
-    </td>
-    <td class="label">제품</td>
-    <td style="width:140px">
-        <select name="product">
-            {% for p in products %}
-            <option {% if edit_data and edit_data[2]==p %}selected{% endif %}>{{ p }}</option>
-            {% endfor %}
-        </select>
-    </td>
-    <td class="label">법인</td>
-    <td style="width:110px">
-        <select name="corporation">
-            {% for c in corporations %}
-            <option {% if edit_data and edit_data[3]==c %}selected{% endif %}>{{ c }}</option>
-            {% endfor %}
-        </select>
-    </td>
-    <td class="label">투자목적</td>
-    <td style="width:160px">
-        <select name="purpose">
-            {% for p in all_purposes %}
-            <option {% if edit_data and edit_data[4]==p %}selected{% endif %}>{{ p }}</option>
-            {% endfor %}
-        </select>
-    </td>
-</tr>
-<tr>
-    <td class="label">투자항목</td>
-    <td colspan="7"><input type="text" name="invest_item" value="{% if edit_data %}{{ edit_data[5] or '' }}{% endif %}" placeholder="ex) 창원 선진화 오븐라인"></td>
-</tr>
-</table>
-</div>
+    <div class="row">
+        <div class="card">
+            <div class="card-header pink">📌 투자 분류</div>
+            <div class="card-body">
+                <div class="form-group">
+                    <div class="form-label">투자 유형</div>
+                    <div class="toggle-group">
+                        <div class="toggle-btn {%- if not edit_data or edit_data[1]=='확장' %} active{%- endif -%}" onclick="selectType(this, '확장')">확장</div>
+                        <div class="toggle-btn {%- if edit_data and edit_data[1]=='경상' %} active{%- endif -%}" onclick="selectType(this, '경상')">경상</div>
+                    </div>
+                    <input type="hidden" name="invest_type" id="invest_type" value="{%- if edit_data -%}{{ edit_data[1] or '확장' }}{%- else -%}확장{%- endif -%}">
+                </div>
 
-<div class="card">
-<div class="card-header teal">📅 투자 주요 일정</div>
-<table>
-<tr>
-    <td class="label">발주 목표</td><td style="width:170px"><input type="month" name="order_target" value="{% if edit_data %}{{ edit_data[6] or '' }}{% endif %}"></td>
-    <td class="label">발주 실적</td><td style="width:170px"><input type="month" name="order_actual" value="{% if edit_data %}{{ edit_data[7] or '' }}{% endif %}"></td>
-</tr>
-<tr>
-    <td class="label">셋업 목표</td><td><input type="month" name="setup_target" value="{% if edit_data %}{{ edit_data[8] or '' }}{% endif %}"></td>
-    <td class="label">셋업 실적</td><td><input type="month" name="setup_actual" value="{% if edit_data %}{{ edit_data[9] or '' }}{% endif %}"></td>
-</tr>
-<tr>
-    <td class="label">양산 목표</td><td><input type="month" name="mass_target" value="{% if edit_data %}{{ edit_data[10] or '' }}{% endif %}"></td>
-    <td class="label">양산 실적</td><td><input type="month" name="mass_actual" value="{% if edit_data %}{{ edit_data[11] or '' }}{% endif %}"></td>
-</tr>
-<tr>
-    <td class="label">연기사유</td>
-    <td colspan="3"><input type="text" name="delay_reason" value="{% if edit_data %}{{ edit_data[12] or '' }}{% endif %}" placeholder="발주·양산 연기 시 사유 기재"></td>
-</tr>
-</table>
-</div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <div class="form-label">📦 제품</div>
+                        <select name="product" id="product" onchange="updateCorporations()">
+                            {%- for p in products -%}
+                            <option {%- if edit_data and edit_data[2]==p %} selected{%- endif -%}>{{ p }}</option>
+                            {%- endfor -%}
+                        </select>
+                    </div>
 
-<div class="card">
-<div class="card-header green">💰 투자절감 실적 (단위: 억원)</div>
-<table>
-<tr>
-    <td class="label">Base 금액</td>
-    <td style="width:130px"><input type="number" name="base_amount" step="0.01" value="{% if edit_data %}{{ edit_data[13] or '' }}{% endif %}" placeholder="0.0"></td>
-    <td class="label">발주가 목표</td>
-    <td style="width:130px"><input type="number" name="order_price_target" step="0.01" value="{% if edit_data %}{{ edit_data[14] or '' }}{% endif %}" placeholder="0.0"></td>
-    <td class="label">발주가 실적</td>
-    <td style="width:130px"><input type="number" name="order_price_actual" step="0.01" value="{% if edit_data %}{{ edit_data[15] or '' }}{% endif %}" placeholder="0.0"></td>
-    <td class="label">절감 목표</td>
-    <td style="width:130px"><input type="number" name="saving_target" step="0.01" value="{% if edit_data %}{{ edit_data[16] or '' }}{% endif %}" placeholder="0.0"></td>
-</tr>
-</table>
-</div>
+                    <div class="form-group">
+                        <div class="form-label">🌍 법인</div>
+                        <select name="corporation" id="corporation">
+                        </select>
+                    </div>
+                </div>
 
-<div class="card">
-<div class="card-header gold">📊 투자비 절감 활동 및 실적 (단위: 억원)</div>
-<table class="reduce-table">
-<thead><tr>
-    <th style="min-width:72px">항목</th>
-    <th style="min-width:105px; background:#dce8f0; color:#1a3a5c;">절감 실적<br>(합계)</th>
-    <th><span class="rn">①</span>신기술<br>신공법</th>
-    <th><span class="rn">②</span>염가형<br>부품</th>
-    <th><span class="rn">③</span>중국/<br>Local 설비</th>
-    <th><span class="rn">④</span>중국/한국<br>Collabo</th>
-    <th><span class="rn">⑤</span>컨테이너<br>최소화</th>
-    <th><span class="rn">⑥</span>출장 인원<br>최소화</th>
-    <th><span class="rn">⑦</span>유휴<br>설비</th>
-    <th><span class="rn">⑧</span>사양<br>최적화</th>
-    <th><span class="rn">⑨</span>기타</th>
-</tr></thead>
-<tbody><tr>
-    <td class="sav-actual-cell">금액(억원)</td>
-    <td><input id="saving_actual" name="saving_actual" readonly value="{% if edit_data %}{{ edit_data[17] or '' }}{% endif %}" placeholder="0.0" style="min-width:100px;"></td>
-    <td><input class="reduce" type="number" name="reduce_1" step="0.01" value="{% if edit_data %}{{ edit_data[18] or '' }}{% endif %}" oninput="calcTotal()"></td>
-    <td><input class="reduce" type="number" name="reduce_2" step="0.01" value="{% if edit_data %}{{ edit_data[19] or '' }}{% endif %}" oninput="calcTotal()"></td>
-    <td><input class="reduce" type="number" name="reduce_3" step="0.01" value="{% if edit_data %}{{ edit_data[20] or '' }}{% endif %}" oninput="calcTotal()"></td>
-    <td><input class="reduce" type="number" name="reduce_4" step="0.01" value="{% if edit_data %}{{ edit_data[21] or '' }}{% endif %}" oninput="calcTotal()"></td>
-    <td><input class="reduce" type="number" name="reduce_5" step="0.01" value="{% if edit_data %}{{ edit_data[22] or '' }}{% endif %}" oninput="calcTotal()"></td>
-    <td><input class="reduce" type="number" name="reduce_6" step="0.01" value="{% if edit_data %}{{ edit_data[23] or '' }}{% endif %}" oninput="calcTotal()"></td>
-    <td><input class="reduce" type="number" name="reduce_7" step="0.01" value="{% if edit_data %}{{ edit_data[24] or '' }}{% endif %}" oninput="calcTotal()"></td>
-    <td><input class="reduce" type="number" name="reduce_8" step="0.01" value="{% if edit_data %}{{ edit_data[25] or '' }}{% endif %}" oninput="calcTotal()"></td>
-    <td><input class="reduce" type="number" name="reduce_9" step="0.01" value="{% if edit_data %}{{ edit_data[26] or '' }}{% endif %}" oninput="calcTotal()"></td>
-</tr>
-<tr>
-    <td colspan="11" style="padding:10px; background:#fff;">
-        <div style="font-weight:600; color:#1a3a5c; margin-bottom:6px; font-size:12px;">활동내용</div>
-        <textarea name="activity" rows="4" placeholder="1) 자동화 공법 개발 및 설비 개선, 3) 중국 업체 활용, 6) 안정화 기간 단축 및 Local 업체 활용, 7) 사내/협력사 유휴설비 활용, 8) 생산 Issue 발생 우려 공정 자동화 제외">{% if edit_data %}{{ edit_data[28] or '' }}{% endif %}</textarea>
-    </td>
-</tr>
-</tbody>
-</table>
-</div>
+                <div class="info-box" style="margin-top: 60px;">
+                    <div class="info-box-title">💡 TIP</div>
+                    <div class="info-box-text">
+                        • 5천만원 미만인 경상투자 건은 Base금액을 집행가로 기입 ("집행가 – 발주가"로 실적 관리)<br>
+                        • 해외 법인은 HQ 생산기술에서 검토/지원해주는 투자 건만 기입 (법인 자체 진행하는 직발주 제외)
+                    </div>
+                </div>
+            </div>
+        </div>
 
-<input type="hidden" name="saving_total" id="saving_total" value="{% if edit_data %}{{ edit_data[27] or '' }}{% endif %}">
+        <div class="card">
+            <div class="card-header cyan">📋 투자 항목 상세</div>
+            <div class="card-body">
+                <div class="form-group">
+                    <div class="form-label">🎯 투자목적</div>
+                    <select name="purpose">
+                        {%- for p in all_purposes -%}
+                        <option {%- if edit_data and edit_data[4]==p %} selected{%- endif -%}>{{ p }}</option>
+                        {%- endfor -%}
+                    </select>
+                </div>
 
-</div>
+                <div class="form-group">
+                    <div class="form-label">투자항목</div>
+                    <input type="text" name="invest_item" value="{%- if edit_data -%}{{ edit_data[5] or '' }}{%- endif -%}" placeholder="예: 창원 선진화 오븐라인">
+                </div>
 
-<div class="btn-area">
-    <button type="submit" class="btn-primary">💾 저장</button>
-    <a href="/list" class="btn-secondary">📊 조회 페이지</a>
+                <div class="info-box">
+                    <div class="info-box-title">💡 TIP: 투자항목은 구체적으로 작성해주세요</div>
+                    <div class="info-box-text">(예: "라인 #3 자동화 설비 도입" 등)</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card card-full">
+        <div class="card-header amber">📅 투자 주요 일정</div>
+        <div class="card-body">
+            <div class="form-row">
+                <div class="form-group">
+                    <div class="form-label">🎯 발주 목표</div>
+                    <input type="month" name="order_target" value="{%- if edit_data -%}{{ edit_data[6] or '' }}{%- endif -%}">
+                </div>
+                <div class="form-group">
+                    <div class="form-label">✅ 발주 실적</div>
+                    <input type="month" name="order_actual" value="{%- if edit_data -%}{{ edit_data[7] or '' }}{%- endif -%}">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <div class="form-label">🎯 셋업 목표</div>
+                    <input type="month" name="setup_target" value="{%- if edit_data -%}{{ edit_data[8] or '' }}{%- endif -%}">
+                </div>
+                <div class="form-group">
+                    <div class="form-label">✅ 셋업 실적</div>
+                    <input type="month" name="setup_actual" value="{%- if edit_data -%}{{ edit_data[9] or '' }}{%- endif -%}">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <div class="form-label">🎯 양산 목표</div>
+                    <input type="month" name="mass_target" value="{%- if edit_data -%}{{ edit_data[10] or '' }}{%- endif -%}">
+                </div>
+                <div class="form-group">
+                    <div class="form-label">✅ 양산 실적</div>
+                    <input type="month" name="mass_actual" value="{%- if edit_data -%}{{ edit_data[11] or '' }}{%- endif -%}">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <div class="form-label">❓ 연기사유</div>
+                <input type="text" name="delay_reason" value="{%- if edit_data -%}{{ edit_data[12] or '' }}{%- endif -%}" placeholder="예: 제품개발 지연에 따른 양산 일정">
+            </div>
+        </div>
+    </div>
+
+    <div class="row" style="margin-top: 24px;">
+        <div class="card">
+            <div class="card-header blue">💰 투자금액 (단위: 억원)</div>
+            <div class="card-body">
+                <div class="form-group">
+                    <div class="form-label">💵 Base 금액</div>
+                    <input type="number" name="base_amount" step="0.01" value="{%- if edit_data -%}{{ edit_data[13] or '' }}{%- endif -%}" placeholder="0.00">
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <div class="form-label">🎯 발주가 목표</div>
+                        <input type="number" name="order_price_target" step="0.01" value="{%- if edit_data -%}{{ edit_data[14] or '' }}{%- endif -%}" placeholder="0.00">
+                    </div>
+
+                    <div class="form-group">
+                        <div class="form-label">✅ 발주가 실적</div>
+                        <input type="number" name="order_price_actual" step="0.01" value="{%- if edit_data -%}{{ edit_data[15] or '' }}{%- endif -%}" placeholder="0.00">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header violet">📊 절감 실적 (단위: 억원)</div>
+            <div class="card-body">
+                <div class="form-row">
+                    <div class="form-group">
+                        <div class="form-label">🎯 절감 목표</div>
+                        <input type="number" name="saving_target" step="0.01" value="{%- if edit_data -%}{{ edit_data[16] or '' }}{%- endif -%}" placeholder="0.00">
+                    </div>
+
+                    <div class="form-group">
+                        <div class="form-label">✅ 절감 실적</div>
+                        <input id="saving_actual" name="saving_actual" class="saving-actual-highlight" readonly value="{%- if edit_data -%}{{ edit_data[17] or '' }}{%- endif -%}" placeholder="0.00">
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <div class="info-box-title">💡 절감 실적은 아래 세부 항목의 합계가 자동 계산됩니다</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card card-full">
+        <div class="card-header emerald">📊 투자비 절감 활동 실적 (단위: 억원)</div>
+        <div class="card-body">
+            <div class="table-wrapper">
+                <table class="reduce-table">
+                    <thead>
+                        <tr>
+                            <th style="width:110px">항목</th>
+                            <th style="width:100px">활동 합계</th>
+                            <th><span class="reduce-number">①</span>신기술<br>신공법</th>
+                            <th><span class="reduce-number">②</span>염가형<br>부품</th>
+                            <th><span class="reduce-number">③</span>중국/<br>Local 설비</th>
+                            <th><span class="reduce-number">④</span>중국/한국<br>Collabo</th>
+                            <th><span class="reduce-number">⑤</span>컨테이너<br>최소화</th>
+                            <th><span class="reduce-number">⑥</span>출장 인원<br>최소화</th>
+                            <th><span class="reduce-number">⑦</span>유휴<br>설비</th>
+                            <th><span class="reduce-number">⑧</span>사양<br>최적화</th>
+                            <th><span class="reduce-number">⑨</span>기타</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>절감 실적</td>
+                            <td><input id="total_display" readonly value="{%- if edit_data -%}{{ edit_data[27] or '0.00' }}{%- else -%}0.00{%- endif -%}"></td>
+                            <td><input class="reduce" type="number" name="reduce_1" step="0.01" value="{%- if edit_data -%}{{ edit_data[18] or '' }}{%- endif -%}" oninput="calcTotal()"></td>
+                            <td><input class="reduce" type="number" name="reduce_2" step="0.01" value="{%- if edit_data -%}{{ edit_data[19] or '' }}{%- endif -%}" oninput="calcTotal()"></td>
+                            <td><input class="reduce" type="number" name="reduce_3" step="0.01" value="{%- if edit_data -%}{{ edit_data[20] or '' }}{%- endif -%}" oninput="calcTotal()"></td>
+                            <td><input class="reduce" type="number" name="reduce_4" step="0.01" value="{%- if edit_data -%}{{ edit_data[21] or '' }}{%- endif -%}" oninput="calcTotal()"></td>
+                            <td><input class="reduce" type="number" name="reduce_5" step="0.01" value="{%- if edit_data -%}{{ edit_data[22] or '' }}{%- endif -%}" oninput="calcTotal()"></td>
+                            <td><input class="reduce" type="number" name="reduce_6" step="0.01" value="{%- if edit_data -%}{{ edit_data[23] or '' }}{%- endif -%}" oninput="calcTotal()"></td>
+                            <td><input class="reduce" type="number" name="reduce_7" step="0.01" value="{%- if edit_data -%}{{ edit_data[24] or '' }}{%- endif -%}" oninput="calcTotal()"></td>
+                            <td><input class="reduce" type="number" name="reduce_8" step="0.01" value="{%- if edit_data -%}{{ edit_data[25] or '' }}{%- endif -%}" oninput="calcTotal()"></td>
+                            <td><input class="reduce" type="number" name="reduce_9" step="0.01" value="{%- if edit_data -%}{{ edit_data[26] or '' }}{%- endif -%}" oninput="calcTotal()"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="activity-section">
+                <div class="activity-label">📝 활동내용</div>
+                <textarea name="activity" placeholder="절감 활동 내용을 상세히 입력하세요
+예)
+1) 자동화 공법 개발 및 설비 개선
+3) 중국 업체 활용
+6) 안정화 기간 단축 및 Local 업체 활용
+7) 사내/협력사 유휴설비 활용">{%- if edit_data -%}{{ edit_data[28] or '' }}{%- endif -%}</textarea>
+            </div>
+        </div>
+    </div>
+
+    <input type="hidden" name="saving_total" id="saving_total" value="{%- if edit_data -%}{{ edit_data[27] or '' }}{%- endif -%}">
+
+    <div class="button-group">
+        <button type="submit" class="btn-primary">💾 저장하기</button>
+        <a href="/list" class="btn-secondary">📊 투자실적 조회</a>
+    </div>
+
+    </form>
 </div>
 
 <script>
+const CORPORATIONS = {{ corporations_json | safe }};
+const EDIT_PRODUCT = {%- if edit_data -%}"{{ edit_data[2] or '키친' }}"{%- else -%}"키친"{%- endif -%};
+const EDIT_CORPORATION = {%- if edit_data -%}"{{ edit_data[3] or '' }}"{%- else -%}""{%- endif -%};
+
+function updateCorporations() {
+    const product = document.getElementById('product').value;
+    const corpSelect = document.getElementById('corporation');
+    const corps = CORPORATIONS[product] || [];
+    
+    corpSelect.innerHTML = '';
+    corps.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c;
+        opt.textContent = c;
+        corpSelect.appendChild(opt);
+    });
+}
+
+function selectType(btn, type){
+    document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('invest_type').value = type;
+}
+
 function calcTotal(){
     let s=0;
     document.querySelectorAll(".reduce").forEach(e=>{ s+=Number(e.value)||0; });
     const total = s.toFixed(2);
     document.getElementById("saving_actual").value = total;
     document.getElementById("saving_total").value = total;
+    document.getElementById("total_display").value = total;
 }
-window.onload = function(){ calcTotal(); }
+
+window.onload = function(){ 
+    updateCorporations();
+    if(EDIT_CORPORATION) {
+        document.getElementById('corporation').value = EDIT_CORPORATION;
+    }
+    calcTotal(); 
+}
 </script>
 
 </body>
@@ -463,181 +984,431 @@ LIST_TPL = """
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<title>누적 실적 조회</title>
+<title>설비 투자비 활동 실적 조회</title>
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
+
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Malgun Gothic','맑은 고딕',Arial,sans-serif;font-size:12px;background:#f0f0f0;color:#333}
-.top-nav{background:#1a3a5c;color:#fff;padding:10px 20px;display:flex;align-items:center;gap:24px;font-size:13px}
-.top-nav h2{font-size:16px;font-weight:600;margin-right:12px}
-.top-nav a{color:#a8d4f0;text-decoration:none}
-.top-nav a:hover{color:#fff;text-decoration:underline}
-.filter-bar{background:#fff;border-bottom:1px solid #ddd;padding:8px 20px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
-.filter-bar label{font-weight:600;color:#1a3a5c;font-size:12px}
-.filter-bar select{padding:4px 8px;border:1px solid #ccc;border-radius:3px;font-size:12px}
-.table-wrap{overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 100px)}
-table{border-collapse:collapse;white-space:nowrap;min-width:100%;background:#fff}
-thead th{position:sticky;top:0;z-index:10;background:#1a3a5c;color:#fff;font-weight:600;font-size:11px;padding:6px 5px;border:1px solid #2a5a8c;text-align:center}
-thead tr.gh th{background:#162d4a;font-size:11px;padding:4px 5px;border-bottom:2px solid #3a7ab5}
-td.sc,th.sc{position:sticky;z-index:5;background:#eef3f8}
-th.sc{background:#1a3a5c;z-index:15}
-td.sc{border-right:2px solid #1a3a5c}
+body{
+    font-family:'Noto Sans KR','Malgun Gothic',sans-serif;
+    font-size:13px;
+    background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color:#333;
+    padding:16px;
+}
+
+.top-header{
+    background:linear-gradient(135deg, #4a5f9d 0%, #5a4a8a 100%);
+    backdrop-filter:blur(10px);
+    padding:18px 28px;
+    border-radius:16px;
+    box-shadow:0 8px 32px rgba(0,0,0,0.15);
+    margin-bottom:20px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+}
+
+.top-header h2{
+    font-size:22px;
+    font-weight:700;
+    color:#fff;
+    display:flex;
+    align-items:center;
+    gap:10px;
+}
+
+.top-header-right{
+    display:flex;
+    gap:12px;
+    align-items:center;
+}
+
+.top-header a{
+    background:rgba(255,255,255,0.2);
+    color:#fff;
+    padding:12px 24px;
+    border-radius:10px;
+    text-decoration:none;
+    font-weight:600;
+    font-size:15px;
+    transition:all 0.3s;
+    border:1px solid rgba(255,255,255,0.3);
+}
+
+.top-header a:hover{
+    background:rgba(255,255,255,0.3);
+    transform:translateY(-2px);
+}
+
+.excel-btn{
+    background:rgba(255,255,255,0.2);
+    color:#fff;
+    padding:10px 16px;
+    border-radius:10px;
+    text-decoration:none;
+    font-weight:600;
+    font-size:15px;
+    transition:all 0.3s;
+    border:1px solid rgba(255,255,255,0.3);
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:6px;
+}
+
+.excel-btn:hover{
+    background:rgba(255,255,255,0.3);
+    transform:translateY(-2px);
+}
+
+.filter-bar{
+    background:rgba(255,255,255,0.98);
+    border-radius:12px;
+    padding:16px 24px;
+    display:flex;
+    gap:20px;
+    align-items:center;
+    flex-wrap:wrap;
+    margin-bottom:16px;
+    box-shadow:0 4px 16px rgba(0,0,0,0.08);
+}
+
+.filter-bar label{
+    font-weight:600;
+    color:#667eea;
+    font-size:14px;
+}
+
+.filter-bar select{
+    padding:8px 32px 8px 12px;
+    border:2px solid #e2e8f0;
+    border-radius:8px;
+    font-size:14px;
+    background:#f8fafc;
+    cursor:pointer;
+    appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23667eea' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;
+    background-position:right 10px center;
+    transition:all 0.3s;
+}
+
+.filter-bar select:focus{
+    border-color:#667eea;
+    outline:none;
+    box-shadow:0 0 0 3px rgba(102,126,234,0.1);
+}
+
+.legend{
+    margin-left:auto;
+    display:flex;
+    gap:16px;
+    align-items:center;
+    font-size:13px;
+}
+
+.legend-item{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    color:#64748b;
+    font-weight:500;
+}
+
+.sig{
+    width:16px;
+    height:16px;
+    border-radius:50%;
+    box-shadow:0 2px 4px rgba(0,0,0,0.2);
+}
+
+.s-g{background:#10b981}
+.s-y{background:#fbbf24}
+.s-x{background:#94a3b8}
+
+.table-container{
+    background:rgba(255,255,255,0.98);
+    border-radius:16px;
+    box-shadow:0 8px 32px rgba(0,0,0,0.12);
+    overflow:hidden;
+}
+
+.table-wrap{
+    overflow-x:auto;
+    overflow-y:auto;
+    max-height:calc(100vh - 220px);
+}
+
+table{
+    border-collapse:collapse;
+    white-space:nowrap;
+    min-width:100%;
+    background:#fff;
+}
+
+thead th{
+    position:sticky;
+    top:0;
+    z-index:10;
+    background:#667eea;
+    color:#fff;
+    font-weight:600;
+    font-size:12px;
+    padding:11px 9px;
+    border:1px solid #94a3b8;
+    text-align:center;
+}
+
+thead tr.gh th{
+    background:#5a67d8;
+    font-size:13px;
+    padding:9px;
+    border:1px solid #94a3b8;
+}
+
+td.sc,th.sc{
+    position:sticky;
+    z-index:5;
+    background:#f1f5f9;
+}
+
+th.sc{
+    background:#667eea !important;
+    z-index:15;
+}
+
+td.sc{
+    background:#f1f5f9;
+}
+
 .c0{left:0;min-width:54px}
 .c1{left:54px;min-width:46px}
 .c2{left:100px;min-width:58px}
-.c3{left:158px;min-width:230px}
-tbody td{padding:5px 7px;border:1px solid #ddd;font-size:11.5px;text-align:center;vertical-align:middle}
+.c3{left:158px;min-width:120px}
+
+.c4{position:sticky;left:278px;z-index:5;background:#f1f5f9}
+.c5{position:sticky;left:428px;z-index:5;background:#f1f5f9}
+
+th.c4,th.c5{
+    background:#667eea !important;
+    z-index:15 !important;
+}
+
+tbody tr:nth-child(even) td.c4,
+tbody tr:nth-child(even) td.c5{background:#f1f5f9}
+
+tbody tr:nth-child(odd) td.c4,
+tbody tr:nth-child(odd) td.c5{background:#e2e8f0}
+
+tbody tr:hover td.c4,
+tbody tr:hover td.c5{background:#ddd6fe !important}
+
+tbody td{
+    padding:9px 11px;
+    border:1px solid #94a3b8;
+    font-size:13px;
+    text-align:center;
+    vertical-align:middle;
+}
+
 td.left{text-align:left}
-td.act-cell{text-align:left;max-width:175px;white-space:normal;word-break:break-all}
-tbody tr:nth-child(even) td{background:#f7f9fc}
-tbody tr:nth-child(odd)  td{background:#fff}
-tbody tr:hover           td{background:#e2ecf7 !important}
-tbody tr:nth-child(even) td.sc{background:#eef3f8}
-tbody tr:nth-child(odd)  td.sc{background:#e4ecf5}
-tbody tr:hover           td.sc{background:#d4e4f3 !important}
-th.gs{background:#2e6da4}
-th.gv{background:#3d8b5e}
-th.gr{background:#b8860b;color:#fff}
-th.ge{background:#6a5acd}
-th.gmt{background:#d4935a;color:#fff;font-size:10.5px}
-th.gma{background:#e8b87a;color:#5a3a00;font-size:10.5px}
-tr.gh .g-s{background:#245a8c}
-tr.gh .g-v{background:#2f7048}
-tr.gh .g-r{background:#8a6508}
-tr.gh .g-e{background:#5548b0}
-tr.gh .g-m{background:#a36520}
-.sig{display:inline-block;width:15px;height:15px;border-radius:50%;vertical-align:middle}
-.s-g{background:#28a745;box-shadow:0 0 5px #28a74588}
-.s-y{background:#ffc107;box-shadow:0 0 5px #ffc10788}
-.s-r{background:#dc3545;box-shadow:0 0 5px #dc354588}
-.s-x{background:#adb5bd}
-.np{color:#28a745;font-weight:600}
-.nn{color:#dc3545;font-weight:600}
-td.mhv{background:#fffbe6 !important;font-weight:700;color:#7a5a00}
-.footer-info{padding:6px 20px;font-size:11px;color:#666;background:#fff;border-top:1px solid#ddd}
-.legend{display:inline-flex;gap:14px;align-items:center;margin-left:auto;font-size:11px}
-.li{display:flex;align-items:center;gap:5px;color:#ccc}
-.row-actions{display:flex;gap:6px;align-items:center}
-.icon-btn{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:4px;cursor:pointer;transition:all .2s;border:1px solid;background:#fff;font-size:13px;text-decoration:none}
-.icon-edit{color:#2e6da4;border-color:#2e6da4}
-.icon-edit:hover{background:#2e6da4;color:#fff}
-.icon-del{color:#dc3545;border-color:#dc3545}
-.icon-del:hover{background:#dc3545;color:#fff}
+
+td.act-cell{
+    text-align:left;
+    max-width:300px;
+    white-space:normal;
+    word-break:break-all;
+    line-height:1.5;
+}
+
+tbody tr:nth-child(even) td{background:#f8fafc}
+tbody tr:nth-child(odd) td{background:#fff}
+tbody tr:hover td{background:#e0e7ff !important}
+
+tbody tr:nth-child(even) td.sc{background:#f1f5f9}
+tbody tr:nth-child(odd) td.sc{background:#e2e8f0}
+tbody tr:hover td.sc{background:#ddd6fe !important}
+
+tfoot td{
+    padding:10px 11px;
+    border:1px solid #94a3b8;
+    font-size:13px;
+    text-align:center;
+    font-weight:700;
+    background:#fef3c7;
+    color:#78350f;
+}
+
+th.gs{background:#3b82f6;border:1px solid #94a3b8}
+th.gv{background:#10b981;border:1px solid #94a3b8}
+th.gr{background:#fbbf24;color:#78350f;border:1px solid #94a3b8}
+th.ge{background:#8b5cf6;border:1px solid #94a3b8}
+
+tr.gh .g-s{background:#2563eb;border:1px solid #94a3b8}
+tr.gh .g-v{background:#059669;border:1px solid #94a3b8}
+tr.gh .g-r{background:#f59e0b;border:1px solid #94a3b8}
+tr.gh .g-e{background:#7c3aed;border:1px solid #94a3b8}
+
+.np{color:#10b981;font-weight:700}
+.nn{color:#ef4444;font-weight:700}
+
+.footer-info{
+    padding:12px 24px;
+    font-size:14px;
+    color:#64748b;
+    background:rgba(255,255,255,0.95);
+    border-top:2px solid #e2e8f0;
+    font-weight:600;
+}
+
+.row-actions{
+    display:flex;
+    gap:6px;
+    align-items:center;
+    justify-content:center;
+}
+
+.icon-btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:28px;
+    height:28px;
+    border-radius:6px;
+    cursor:pointer;
+    transition:all 0.3s;
+    border:none;
+    background:#fff;
+    font-size:14px;
+    text-decoration:none;
+    box-shadow:0 2px 4px rgba(0,0,0,0.1);
+}
+
+.icon-edit{color:#3b82f6}
+.icon-edit:hover{background:#3b82f6;color:#fff;transform:scale(1.1)}
+
+.icon-del{color:#ef4444}
+.icon-del:hover{background:#ef4444;color:#fff;transform:scale(1.1)}
+
+.timestamp-cell{
+    font-size:12px;
+    color:#64748b;
+    white-space:nowrap;
+}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 
-<div class="top-nav">
-    <h2>📊 누적 투자 실적 조회</h2>
-    <a href="/">◀ 입력 페이지</a>
-    <div class="legend">
-        <div class="li"><span class="sig s-g"></span> 목표 초과</div>
-        <div class="li"><span class="sig s-y"></span> 진행 중</div>
-        <div class="li"><span class="sig s-r"></span> 미달성</div>
-        <div class="li"><span class="sig s-x"></span> 미입력</div>
+<div class="top-header">
+    <h2>📊 설비 투자비 활동 실적 조회</h2>
+    <div class="top-header-right">
+        <button class="excel-btn" onclick="downloadExcel()">📥 Excel 다운로드</button>
+        <a href="/">◀ 입력 페이지</a>
     </div>
 </div>
 
 <div class="filter-bar">
     <label>제품</label>
-    <select id="fp" onchange="applyFilter()">
+    <select id="fp" onchange="applyFilter(); updateFilterCorporations();">
         <option value="">전체</option>
         <option>키친</option><option>빌트인쿠킹</option><option>리빙</option><option>부품</option><option>ES</option>
     </select>
+    
     <label>법인</label>
     <select id="fc" onchange="applyFilter()">
         <option value="">전체</option>
-        <option>KR</option><option>AI</option><option>AT</option><option>AZ</option><option>EG</option><option>IL_N</option><option>IL_P</option><option>IN_T</option><option>MN</option><option>MX</option><option>MZ</option><option>PN</option><option>RA</option><option>SR</option><option>TA</option><option>TH</option><option>TN</option><option>TR</option><option>VH</option><option>WR</option>
     </select>
+    
     <label>투자유형</label>
     <select id="ft" onchange="applyFilter()">
         <option value="">전체</option><option>확장</option><option>경상</option>
     </select>
+    
+    <label>투자목적</label>
+    <select id="fpu" onchange="applyFilter()">
+        <option value="">전체</option>
+    </select>
+    
+    <div class="legend">
+        <div class="legend-item"><span class="sig s-g"></span> 목표 초과 (HS: 30% 이상 / ES: 50% 이상)</div>
+        <div class="legend-item"><span class="sig s-y"></span> 목표 미달</div>
+        <div class="legend-item"><span class="sig s-x"></span> 미입력</div>
+    </div>
 </div>
 
-<div class="table-wrap">
-<table id="mainTable">
-<thead>
-<tr class="gh">
-    <th class="sc c0" rowspan="2" style="z-index:15"></th>
-    <th class="sc c1" rowspan="2" style="z-index:15">제품</th>
-    <th class="sc c2" rowspan="2" style="z-index:15">법인</th>
-    <th class="sc c3" rowspan="2" style="z-index:15">투자유형</th>
-    <th rowspan="2">투자항목</th>
-    <th rowspan="2">투자목적</th>
-    <th class="g-s" colspan="7">📅 투자 주요 일정</th>
-    <th class="g-v" colspan="4">💰 투자절감</th>
-    <th class="g-r" colspan="11">📊 절감 활동 및 실적</th>
-    <th class="g-e" colspan="3">🎯 목표</th>
-    <th class="g-m" colspan="48">📆 월별 절감 실적</th>
-</tr>
-<tr>
-    <th class="gs">발주목표</th><th class="gs">발주실적</th>
-    <th class="gs">셋업목표</th><th class="gs">셋업실적</th>
-    <th class="gs">양산목표</th><th class="gs">양산실적</th>
-    <th class="gs">연기사유</th>
-    <th class="gv">Base</th>
-    <th class="gv">발주가<br>목표</th>
-    <th class="gv">발주가<br>실적</th>
-    <th class="gv">절감<br>목표</th>
-    <th class="gr">절감<br>실적<br>(합계)</th>
-    <th class="gr">①신기술<br>신공법</th>
-    <th class="gr">②염가형<br>부품</th>
-    <th class="gr">③중국/<br>Local</th>
-    <th class="gr">④중국/한국<br>Collabo</th>
-    <th class="gr">⑤컨테이너<br>최소화</th>
-    <th class="gr">⑥출장<br>최소화</th>
-    <th class="gr">⑦유휴<br>설비</th>
-    <th class="gr">⑧사양<br>최적화</th>
-    <th class="gr">⑨기타</th>
-    <th class="gr">활동내용</th>
-    <th class="ge">절감률<br>목표(%)</th>
-    <th class="ge">절감률<br>실적(%)</th>
-    <th class="ge">Signal</th>
-    <th class="gmt">26.01월<br>(목표)</th><th class="gma">26.01월<br>(실적)</th>
-    <th class="gmt">26.02월<br>(목표)</th><th class="gma">26.02월<br>(실적)</th>
-    <th class="gmt">26.03월<br>(목표)</th><th class="gma">26.03월<br>(실적)</th>
-    <th class="gmt">26.04월<br>(목표)</th><th class="gma">26.04월<br>(실적)</th>
-    <th class="gmt">26.05월<br>(목표)</th><th class="gma">26.05월<br>(실적)</th>
-    <th class="gmt">26.06월<br>(목표)</th><th class="gma">26.06월<br>(실적)</th>
-    <th class="gmt">26.07월<br>(목표)</th><th class="gma">26.07월<br>(실적)</th>
-    <th class="gmt">26.08월<br>(목표)</th><th class="gma">26.08월<br>(실적)</th>
-    <th class="gmt">26.09월<br>(목표)</th><th class="gma">26.09월<br>(실적)</th>
-    <th class="gmt">26.10월<br>(목표)</th><th class="gma">26.10월<br>(실적)</th>
-    <th class="gmt">26.11월<br>(목표)</th><th class="gma">26.11월<br>(실적)</th>
-    <th class="gmt">26.12월<br>(목표)</th><th class="gma">26.12월<br>(실적)</th>
-    <th class="gmt">27.01월<br>(목표)</th><th class="gma">27.01월<br>(실적)</th>
-    <th class="gmt">27.02월<br>(목표)</th><th class="gma">27.02월<br>(실적)</th>
-    <th class="gmt">27.03월<br>(목표)</th><th class="gma">27.03월<br>(실적)</th>
-    <th class="gmt">27.04월<br>(목표)</th><th class="gma">27.04월<br>(실적)</th>
-    <th class="gmt">27.05월<br>(목표)</th><th class="gma">27.05월<br>(실적)</th>
-    <th class="gmt">27.06월<br>(목표)</th><th class="gma">27.06월<br>(실적)</th>
-    <th class="gmt">27.07월<br>(목표)</th><th class="gma">27.07월<br>(실적)</th>
-    <th class="gmt">27.08월<br>(목표)</th><th class="gma">27.08월<br>(실적)</th>
-    <th class="gmt">27.09월<br>(목표)</th><th class="gma">27.09월<br>(실적)</th>
-    <th class="gmt">27.10월<br>(목표)</th><th class="gma">27.10월<br>(실적)</th>
-    <th class="gmt">27.11월<br>(목표)</th><th class="gma">27.11월<br>(실적)</th>
-    <th class="gmt">27.12월<br>(목표)</th><th class="gma">27.12월<br>(실적)</th>
-</tr>
-</thead>
-<tbody id="tableBody"></tbody>
-</table>
+<div class="table-container">
+    <div class="table-wrap">
+        <table id="mainTable">
+            <thead>
+                <tr class="gh">
+                    <th class="sc c0" rowspan="2" style="z-index:15">수정/<br>삭제</th>
+                    <th class="sc c1" rowspan="2" style="z-index:15">제품</th>
+                    <th class="sc c2" rowspan="2" style="z-index:15">법인</th>
+                    <th class="sc c3" rowspan="2" style="z-index:15">투자유형</th>
+                    <th class="c4" rowspan="2" style="z-index:15;min-width:150px">투자항목</th>
+                    <th class="c5" rowspan="2" style="z-index:15;min-width:100px">투자목적</th>
+                    <th class="g-s" colspan="7">📅 투자 주요 일정</th>
+                    <th class="g-v" colspan="4">💰 투자절감</th>
+                    <th class="g-r" colspan="11">📊 절감 활동 및 실적</th>
+                    <th class="g-e" colspan="4">🎯 목표</th>
+                </tr>
+                <tr>
+                    <th class="gs">발주목표</th><th class="gs">발주실적</th>
+                    <th class="gs">셋업목표</th><th class="gs">셋업실적</th>
+                    <th class="gs">양산목표</th><th class="gs">양산실적</th>
+                    <th class="gs">연기사유</th>
+                    <th class="gv">Base</th>
+                    <th class="gv">발주가<br>목표</th>
+                    <th class="gv">발주가<br>실적</th>
+                    <th class="gv">절감<br>목표</th>
+                    <th class="gr">절감<br>실적<br>(합계)</th>
+                    <th class="gr">①신기술<br>신공법</th>
+                    <th class="gr">②염가형<br>부품</th>
+                    <th class="gr">③중국/<br>Local</th>
+                    <th class="gr">④중국/한국<br>Collabo</th>
+                    <th class="gr">⑤컨테이너<br>최소화</th>
+                    <th class="gr">⑥출장<br>최소화</th>
+                    <th class="gr">⑦유휴<br>설비</th>
+                    <th class="gr">⑧사양<br>최적화</th>
+                    <th class="gr">⑨기타</th>
+                    <th class="gr">활동내용</th>
+                    <th class="ge">절감률<br>목표(%)</th>
+                    <th class="ge">절감률<br>실적(%)</th>
+                    <th class="ge">Signal</th>
+                    <th class="ge">입력/수정<br>일시</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+            <tfoot id="tableFoot"></tfoot>
+        </table>
+    </div>
+    <div class="footer-info" id="footerInfo">총 0건</div>
 </div>
-
-<div class="footer-info" id="footerInfo">총 0건</div>
 
 <script>
 const DATA = {{ processed_json | safe }};
 const MONTHS = {{ months_json | safe }};
+const CORPORATIONS = {{ corporations_json | safe }};
+const ALL_PURPOSES = {{ all_purposes_json | safe }};
 
 console.log("데이터 로드:", DATA.length, "건");
 
 function sig(r){
-    const t=parseFloat(r[16])||0, a=parseFloat(r[17])||0;
-    if(!t&&!a) return "s-x";
-    if(a>=t&&a>0) return "s-g";
-    if(a>0) return "s-y";
-    return "s-r";
+    const product = r[2] || "";
+    const base = parseFloat(r[13]) || 0;
+    const actual = parseFloat(r[17]) || 0;
+    
+    if(!base || !actual) return "s-x";
+    
+    const actualRate = (actual / base) * 100;
+    const targetRate = product === "ES" ? 50 : 30;
+    
+    if(actualRate >= targetRate) return "s-g";
+    return "s-y";
 }
+
 function nc(v){ const n=parseFloat(v); return isNaN(n)?"": n>0?"np":(n<0?"nn":""); }
 function f(v){ return (v!=null&&v!=="")? v : "-"; }
 
@@ -648,13 +1419,46 @@ function deleteRow(id){
         .then(d=>{ if(d.success) location.reload(); });
 }
 
+function updateFilterCorporations() {
+    const product = document.getElementById('fp').value;
+    const corpSelect = document.getElementById('fc');
+    
+    let corps = [];
+    if(product && CORPORATIONS[product]) {
+        corps = CORPORATIONS[product];
+    } else {
+        const allCorps = new Set();
+        Object.values(CORPORATIONS).forEach(arr => arr.forEach(c => allCorps.add(c)));
+        corps = Array.from(allCorps).sort();
+    }
+    
+    const currentValue = corpSelect.value;
+    corpSelect.innerHTML = '<option value="">전체</option>';
+    corps.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c;
+        opt.textContent = c;
+        corpSelect.appendChild(opt);
+    });
+    
+    if(corps.includes(currentValue)) {
+        corpSelect.value = currentValue;
+    }
+}
+
 function renderTable(data){
     const tb = document.getElementById("tableBody");
+    const tf = document.getElementById("tableFoot");
     let out = "";
+    
+    let totals = {
+        base: 0, order_price_target: 0, order_price_actual: 0,
+        saving_target: 0, saving_actual: 0,
+        r1: 0, r2: 0, r3: 0, r4: 0, r5: 0, r6: 0, r7: 0, r8: 0, r9: 0
+    };
 
     data.forEach(r => {
         const rid = r[0];
-        const ma = r[31] || [];   // ✅ 월별 데이터
         let h = "<tr>";
 
         h += "<td class='sc c0'><div class='row-actions'>";
@@ -665,41 +1469,71 @@ function renderTable(data){
         h += "<td class='sc c1'>"+f(r[2])+"</td>";
         h += "<td class='sc c2'>"+f(r[3])+"</td>";
         h += "<td class='sc c3'>"+f(r[1])+"</td>";
-        h += "<td class='left'>"+f(r[5])+"</td>";
-        h += "<td>"+f(r[4])+"</td>";
+        h += "<td class='c4 left'>"+f(r[5])+"</td>";
+        h += "<td class='c5'>"+f(r[4])+"</td>";
 
         h += "<td>"+f(r[6])+"</td><td>"+f(r[7])+"</td>";
         h += "<td>"+f(r[8])+"</td><td>"+f(r[9])+"</td>";
         h += "<td>"+f(r[10])+"</td><td>"+f(r[11])+"</td>";
         h += "<td class='left'>"+f(r[12])+"</td>";
 
+        const base = parseFloat(r[13]) || 0;
+        const opt = parseFloat(r[14]) || 0;
+        const opa = parseFloat(r[15]) || 0;
+        const sgt = parseFloat(r[16]) || 0;
+        const sga = parseFloat(r[17]) || 0;
+        
+        totals.base += base;
+        totals.order_price_target += opt;
+        totals.order_price_actual += opa;
+        totals.saving_target += sgt;
+        totals.saving_actual += sga;
+
         h += "<td>"+f(r[13])+"</td>";
         h += "<td>"+f(r[14])+"</td>";
         h += "<td>"+f(r[15])+"</td>";
         h += "<td>"+f(r[16])+"</td>";
-
         h += "<td>"+f(r[17])+"</td>";
+        
         for(let i=18;i<=26;i++){
+            const val = parseFloat(r[i]) || 0;
+            totals['r'+(i-17)] += val;
             h += "<td>"+f(r[i])+"</td>";
         }
 
         h += "<td class='act-cell'>"+f(r[28])+"</td>";
 
-        const rt = r[29] != null && r[29] !== "-" ? r[29]+"%" : "-";
-        const ra = r[30] != null && r[30] !== "-" ? r[30]+"%" : "-";
-        h += "<td>"+rt+"</td>";
-        h += "<td>"+ra+"</td>";
+        const rt = r[29];
+        const ra = r[30];
+        h += "<td>"+rt+"%</td>";
+        h += "<td>"+(ra !== "-" ? ra+"%" : "-")+"</td>";
         h += "<td><span class='sig "+sig(r)+"'></span></td>";
-
-        for(let i=0;i<ma.length;i++){
-            h += "<td>"+(ma[i] || 0)+"</td>";
-        }
+        
+        const timestamp = r[31] || "-";
+        h += "<td class='timestamp-cell'>"+timestamp+"</td>";
 
         h += "</tr>";
         out += h;
     });
 
     tb.innerHTML = out;
+    
+    // 합계 행
+    let footHtml = "<tr>";
+    footHtml += "<td colspan='6' style='text-align:center;background:#fef9c3;'>합 계</td>";
+    footHtml += "<td colspan='7' style='background:#fef9c3;'></td>";
+    footHtml += "<td>"+totals.base.toFixed(2)+"</td>";
+    footHtml += "<td>"+totals.order_price_target.toFixed(2)+"</td>";
+    footHtml += "<td>"+totals.order_price_actual.toFixed(2)+"</td>";
+    footHtml += "<td>"+totals.saving_target.toFixed(2)+"</td>";
+    footHtml += "<td>"+totals.saving_actual.toFixed(2)+"</td>";
+    for(let i=1;i<=9;i++){
+        footHtml += "<td>"+totals['r'+i].toFixed(2)+"</td>";
+    }
+    footHtml += "<td colspan='5' style='background:#fef9c3;'></td>";
+    footHtml += "</tr>";
+    tf.innerHTML = footHtml;
+    
     document.getElementById("footerInfo").textContent = "총 "+data.length+"건";
 }
 
@@ -707,15 +1541,54 @@ function applyFilter(){
     const fp=document.getElementById("fp").value;
     const fc=document.getElementById("fc").value;
     const ft=document.getElementById("ft").value;
+    const fpu=document.getElementById("fpu").value;
     renderTable(DATA.filter(r=>{
         if(fp&&r[2]!==fp) return false;
         if(fc&&r[3]!==fc) return false;
         if(ft&&r[1]!==ft) return false;
+        if(fpu&&r[4]!==fpu) return false;
         return true;
     }));
 }
 
-renderTable(DATA);
+function downloadExcel() {
+    const wb = XLSX.utils.book_new();
+    
+    const headers = [
+        ["제품", "법인", "투자유형", "투자항목", "투자목적",
+         "발주목표", "발주실적", "셋업목표", "셋업실적", "양산목표", "양산실적", "연기사유",
+         "Base", "발주가목표", "발주가실적", "절감목표", "절감실적",
+         "①신기술신공법", "②염가형부품", "③중국/Local", "④중국/한국Collabo",
+         "⑤컨테이너최소화", "⑥출장최소화", "⑦유휴설비", "⑧사양최적화", "⑨기타",
+         "활동내용", "절감률목표(%)", "절감률실적(%)", "입력/수정일시"]
+    ];
+    
+    const rows = DATA.map(r => [
+        r[2], r[3], r[1], r[5], r[4],
+        r[6], r[7], r[8], r[9], r[10], r[11], r[12],
+        r[13], r[14], r[15], r[16], r[17],
+        r[18], r[19], r[20], r[21], r[22], r[23], r[24], r[25], r[26],
+        r[28], r[29], r[30], r[31]
+    ]);
+    
+    const ws = XLSX.utils.aoa_to_sheet([...headers, ...rows]);
+    XLSX.utils.book_append_sheet(wb, ws, "투자실적");
+    XLSX.writeFile(wb, "설비투자비_활동실적_" + new Date().toISOString().slice(0,10) + ".xlsx");
+}
+
+window.onload = function() {
+    updateFilterCorporations();
+    
+    const purposeSelect = document.getElementById('fpu');
+    ALL_PURPOSES.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p;
+        opt.textContent = p;
+        purposeSelect.appendChild(opt);
+    });
+    
+    renderTable(DATA);
+}
 </script>
 
 </body>
@@ -729,7 +1602,3 @@ if __name__ == "__main__":
     print("📍 주소: http://127.0.0.1:5000")
     print("=" * 60)
     app.run(debug=True, host='127.0.0.1', port=5000)
-
-
-
-

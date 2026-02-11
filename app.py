@@ -505,28 +505,9 @@ textarea {
 
 input[readonly] {
     background: #f1f5f9;
+    border: 3px solid #8b5cf6;
+    font-weight: 700;
     color: #1e40af;
-    font-weight: 700;
-    border: 2px solid #cbd5e1;
-}
-
-.saving-actual-highlight {
-    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.25);
-    background: #f5f3ff !important;
-    border: 2px solid #c4b5fd !important;
-    position: relative;
-    font-weight: 700;
-}
-
-.saving-actual-highlight::after {
-    content: '✓';
-    position: absolute;
-    right: 16px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: #8b5cf6;
-    font-weight: 700;
-    font-size: 18px;
 }
 
 .info-box {
@@ -724,7 +705,7 @@ input[readonly] {
             <div class="card-header pink">📌 투자 분류</div>
             <div class="card-body">
                 <div class="form-group">
-                    <div class="form-label">투자 유형</div>
+                    <div class="form-label">💼 투자 유형</div>
                     <div class="toggle-group">
                         <div class="toggle-btn {%- if not edit_data or edit_data[1]=='확장' %} active{%- endif -%}" onclick="selectType(this, '확장')">확장</div>
                         <div class="toggle-btn {%- if edit_data and edit_data[1]=='경상' %} active{%- endif -%}" onclick="selectType(this, '경상')">경상</div>
@@ -749,7 +730,7 @@ input[readonly] {
                     </div>
                 </div>
 
-                <div class="info-box" style="margin-top: 60px;">
+                <div class="info-box">
                     <div class="info-box-title">💡 TIP</div>
                     <div class="info-box-text">
                         • 5천만원 미만인 경상투자 건은 Base금액을 집행가로 기입 ("집행가 – 발주가"로 실적 관리)<br>
@@ -772,7 +753,7 @@ input[readonly] {
                 </div>
 
                 <div class="form-group">
-                    <div class="form-label">투자항목</div>
+                    <div class="form-label">📝 투자항목</div>
                     <input type="text" name="invest_item" value="{%- if edit_data -%}{{ edit_data[5] or '' }}{%- endif -%}" placeholder="예: 창원 선진화 오븐라인">
                 </div>
 
@@ -861,7 +842,7 @@ input[readonly] {
 
                     <div class="form-group">
                         <div class="form-label">✅ 절감 실적</div>
-                        <input id="saving_actual" name="saving_actual" class="saving-actual-highlight" readonly value="{%- if edit_data -%}{{ edit_data[17] or '' }}{%- endif -%}" placeholder="0.00">
+                        <input id="saving_actual" name="saving_actual" readonly value="{%- if edit_data -%}{{ edit_data[17] or '' }}{%- endif -%}" placeholder="0.00">
                     </div>
                 </div>
 
@@ -1185,24 +1166,18 @@ td.sc{
 .c0{left:0;min-width:54px}
 .c1{left:54px;min-width:46px}
 .c2{left:100px;min-width:58px}
-.c3{left:158px;min-width:120px}
+.c3{left:158px;min-width:70px}
+.c4{left:228px;min-width:120px}
+.c5{left:348px;min-width:100px}
 
-.c4{position:sticky;left:278px;z-index:5;background:#f1f5f9}
-.c5{position:sticky;left:428px;z-index:5;background:#f1f5f9}
-
-th.c4,th.c5{
+th.c0,th.c1,th.c2,th.c3,th.c4,th.c5{
     background:#667eea !important;
     z-index:15 !important;
 }
 
-tbody tr:nth-child(even) td.c4,
-tbody tr:nth-child(even) td.c5{background:#f1f5f9}
-
-tbody tr:nth-child(odd) td.c4,
-tbody tr:nth-child(odd) td.c5{background:#e2e8f0}
-
-tbody tr:hover td.c4,
-tbody tr:hover td.c5{background:#ddd6fe !important}
+tbody tr:nth-child(even) td.sc{background:#f1f5f9}
+tbody tr:nth-child(odd) td.sc{background:#e2e8f0}
+tbody tr:hover td.sc{background:#ddd6fe !important}
 
 tbody td{
     padding:9px 11px;
@@ -1226,10 +1201,6 @@ tbody tr:nth-child(even) td{background:#f8fafc}
 tbody tr:nth-child(odd) td{background:#fff}
 tbody tr:hover td{background:#e0e7ff !important}
 
-tbody tr:nth-child(even) td.sc{background:#f1f5f9}
-tbody tr:nth-child(odd) td.sc{background:#e2e8f0}
-tbody tr:hover td.sc{background:#ddd6fe !important}
-
 tfoot td{
     padding:10px 11px;
     border:1px solid #94a3b8;
@@ -1249,6 +1220,7 @@ tr.gh .g-s{background:#2563eb;border:1px solid #94a3b8}
 tr.gh .g-v{background:#059669;border:1px solid #94a3b8}
 tr.gh .g-r{background:#f59e0b;border:1px solid #94a3b8}
 tr.gh .g-e{background:#7c3aed;border:1px solid #94a3b8}
+tr.gh .g-c{background:#5a67d8;border:1px solid #94a3b8}
 
 .np{color:#10b981;font-weight:700}
 .nn{color:#ef4444;font-weight:700}
@@ -1290,12 +1262,6 @@ tr.gh .g-e{background:#7c3aed;border:1px solid #94a3b8}
 
 .icon-del{color:#ef4444}
 .icon-del:hover{background:#ef4444;color:#fff;transform:scale(1.1)}
-
-.timestamp-cell{
-    font-size:12px;
-    color:#64748b;
-    white-space:nowrap;
-}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -1343,18 +1309,19 @@ tr.gh .g-e{background:#7c3aed;border:1px solid #94a3b8}
         <table id="mainTable">
             <thead>
                 <tr class="gh">
-                    <th class="sc c0" rowspan="2" style="z-index:15">수정/<br>삭제</th>
-                    <th class="sc c1" rowspan="2" style="z-index:15">제품</th>
-                    <th class="sc c2" rowspan="2" style="z-index:15">법인</th>
-                    <th class="sc c3" rowspan="2" style="z-index:15">투자유형</th>
-                    <th class="c4" rowspan="2" style="z-index:15;min-width:150px">투자항목</th>
-                    <th class="c5" rowspan="2" style="z-index:15;min-width:100px">투자목적</th>
+                    <th class="sc c0 g-c" colspan="6">투자 분류</th>
                     <th class="g-s" colspan="7">📅 투자 주요 일정</th>
                     <th class="g-v" colspan="4">💰 투자절감</th>
                     <th class="g-r" colspan="11">📊 절감 활동 및 실적</th>
-                    <th class="g-e" colspan="4">🎯 목표</th>
+                    <th class="g-e" colspan="3">🎯 목표</th>
                 </tr>
                 <tr>
+                    <th class="sc c0">수정/<br>삭제</th>
+                    <th class="sc c1">제품</th>
+                    <th class="sc c2">법인</th>
+                    <th class="sc c3">투자<br>유형</th>
+                    <th class="sc c4">투자항목</th>
+                    <th class="sc c5">투자목적</th>
                     <th class="gs">발주목표</th><th class="gs">발주실적</th>
                     <th class="gs">셋업목표</th><th class="gs">셋업실적</th>
                     <th class="gs">양산목표</th><th class="gs">양산실적</th>
@@ -1377,7 +1344,6 @@ tr.gh .g-e{background:#7c3aed;border:1px solid #94a3b8}
                     <th class="ge">절감률<br>목표(%)</th>
                     <th class="ge">절감률<br>실적(%)</th>
                     <th class="ge">Signal</th>
-                    <th class="ge">입력/수정<br>일시</th>
                 </tr>
             </thead>
             <tbody id="tableBody"></tbody>
@@ -1393,23 +1359,8 @@ const MONTHS = {{ months_json | safe }};
 const CORPORATIONS = {{ corporations_json | safe }};
 const ALL_PURPOSES = {{ all_purposes_json | safe }};
 
-console.log("데이터 로드:", DATA.length, "건");
+console.log("✅ 데이터 로드:", DATA.length, "건");
 
-function sig(r){
-    const product = r[2] || "";
-    const base = parseFloat(r[13]) || 0;
-    const actual = parseFloat(r[17]) || 0;
-    
-    if(!base || !actual) return "s-x";
-    
-    const actualRate = (actual / base) * 100;
-    const targetRate = product === "ES" ? 50 : 30;
-    
-    if(actualRate >= targetRate) return "s-g";
-    return "s-y";
-}
-
-function nc(v){ const n=parseFloat(v); return isNaN(n)?"": n>0?"np":(n<0?"nn":""); }
 function f(v){ return (v!=null&&v!=="")? v : "-"; }
 
 function deleteRow(id){
@@ -1459,6 +1410,7 @@ function renderTable(data){
 
     data.forEach(r => {
         const rid = r[0];
+        const product = r[2] || "";
         let h = "<tr>";
 
         h += "<td class='sc c0'><div class='row-actions'>";
@@ -1469,8 +1421,8 @@ function renderTable(data){
         h += "<td class='sc c1'>"+f(r[2])+"</td>";
         h += "<td class='sc c2'>"+f(r[3])+"</td>";
         h += "<td class='sc c3'>"+f(r[1])+"</td>";
-        h += "<td class='c4 left'>"+f(r[5])+"</td>";
-        h += "<td class='c5'>"+f(r[4])+"</td>";
+        h += "<td class='sc c4 left'>"+f(r[5])+"</td>";
+        h += "<td class='sc c5'>"+f(r[4])+"</td>";
 
         h += "<td>"+f(r[6])+"</td><td>"+f(r[7])+"</td>";
         h += "<td>"+f(r[8])+"</td><td>"+f(r[9])+"</td>";
@@ -1503,14 +1455,40 @@ function renderTable(data){
 
         h += "<td class='act-cell'>"+f(r[28])+"</td>";
 
-        const rt = r[29];
-        const ra = r[30];
-        h += "<td>"+rt+"%</td>";
-        h += "<td>"+(ra !== "-" ? ra+"%" : "-")+"</td>";
-        h += "<td><span class='sig "+sig(r)+"'></span></td>";
+        // ===== 핵심: 여기서 절감률 목표, 실적, Signal을 모두 계산 =====
         
-        const timestamp = r[31] || "-";
-        h += "<td class='timestamp-cell'>"+timestamp+"</td>";
+        // 1. 절감률 목표: 제품에 따라 30% 또는 50%
+        const rateTarget = (product === "ES") ? 50 : 30;
+        
+        // 2. 절감률 실적: (절감실적 ÷ Base) × 100
+        let rateActual = "-";
+        let rateActualNum = 0;
+        
+        if(base > 0 && sga > 0) {
+            rateActualNum = (sga / base) * 100;
+            rateActual = rateActualNum.toFixed(1);
+        } else if(base > 0 && sga === 0) {
+            rateActualNum = 0;
+            rateActual = "0";
+        }
+        
+        // 3. Signal 계산
+        let signalClass = "s-x"; // 기본값: 회색(미입력)
+        
+        if(base > 0 && sga > 0) {
+            // 절감실적이 있는 경우: 목표 대비 비교
+            if(rateActualNum >= rateTarget) {
+                signalClass = "s-g"; // 초록색: 목표 이상
+            } else {
+                signalClass = "s-y"; // 주황색: 목표 미달
+            }
+        }
+        
+        console.log(`ID=${rid}, 제품=${product}, Base=${base}, 절감실적=${sga}, 목표=${rateTarget}%, 실적=${rateActual}%, Signal=${signalClass}`);
+        
+        h += "<td>"+rateTarget+"%</td>";
+        h += "<td>"+(rateActual !== "-" ? rateActual+"%" : "-")+"</td>";
+        h += "<td><span class='sig "+signalClass+"'></span></td>";
 
         h += "</tr>";
         out += h;
@@ -1530,7 +1508,7 @@ function renderTable(data){
     for(let i=1;i<=9;i++){
         footHtml += "<td>"+totals['r'+i].toFixed(2)+"</td>";
     }
-    footHtml += "<td colspan='5' style='background:#fef9c3;'></td>";
+    footHtml += "<td colspan='4' style='background:#fef9c3;'></td>";
     footHtml += "</tr>";
     tf.innerHTML = footHtml;
     
@@ -1560,16 +1538,29 @@ function downloadExcel() {
          "Base", "발주가목표", "발주가실적", "절감목표", "절감실적",
          "①신기술신공법", "②염가형부품", "③중국/Local", "④중국/한국Collabo",
          "⑤컨테이너최소화", "⑥출장최소화", "⑦유휴설비", "⑧사양최적화", "⑨기타",
-         "활동내용", "절감률목표(%)", "절감률실적(%)", "입력/수정일시"]
+         "활동내용", "절감률목표(%)", "절감률실적(%)"]
     ];
     
-    const rows = DATA.map(r => [
-        r[2], r[3], r[1], r[5], r[4],
-        r[6], r[7], r[8], r[9], r[10], r[11], r[12],
-        r[13], r[14], r[15], r[16], r[17],
-        r[18], r[19], r[20], r[21], r[22], r[23], r[24], r[25], r[26],
-        r[28], r[29], r[30], r[31]
-    ]);
+    const rows = DATA.map(r => {
+        const product = r[2] || "";
+        const base = parseFloat(r[13]) || 0;
+        const sga = parseFloat(r[17]) || 0;
+        const rateTarget = (product === "ES") ? 50 : 30;
+        let rateActual = "-";
+        if(base > 0 && sga > 0) {
+            rateActual = ((sga / base) * 100).toFixed(1);
+        } else if(base > 0) {
+            rateActual = "0";
+        }
+        
+        return [
+            r[2], r[3], r[1], r[5], r[4],
+            r[6], r[7], r[8], r[9], r[10], r[11], r[12],
+            r[13], r[14], r[15], r[16], r[17],
+            r[18], r[19], r[20], r[21], r[22], r[23], r[24], r[25], r[26],
+            r[28], rateTarget, rateActual
+        ];
+    });
     
     const ws = XLSX.utils.aoa_to_sheet([...headers, ...rows]);
     XLSX.utils.book_append_sheet(wb, ws, "투자실적");
@@ -1577,6 +1568,7 @@ function downloadExcel() {
 }
 
 window.onload = function() {
+    console.log("🎬 페이지 로드 완료");
     updateFilterCorporations();
     
     const purposeSelect = document.getElementById('fpu');
@@ -1588,6 +1580,7 @@ window.onload = function() {
     });
     
     renderTable(DATA);
+    console.log("✅ 테이블 렌더링 완료");
 }
 </script>
 

@@ -183,7 +183,8 @@ def dashboard():
     return render_template_string(DASHBOARD_TPL,
         processed_json=json.dumps(processed, ensure_ascii=False),
         corporations_json=json.dumps(CORPORATIONS, ensure_ascii=False),
-        monthly_json=monthly_json)
+        monthly_json=monthly_json,
+        all_purposes_json=json.dumps(ALL_PURPOSES, ensure_ascii=False))
 
 @app.route("/list")
 def list_page():
@@ -230,8 +231,6 @@ def delete_row(row_id):
 
 # ===== TEMPLATES =====
 
-# ===== TEMPLATES =====
-# ===== TEMPLATES =====
 INPUT_TPL = r"""<!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -303,25 +302,25 @@ input[readonly]{background:#f1f5f9;border:3px solid #8b5cf6;font-weight:700;colo
   {%- if row_id -%}<input type="hidden" name="row_id" value="{{ row_id }}">{%- endif -%}
   <div class="row">
     <div class="card">
-      <div class="card-header pink">📌 투자 분류</div>
+      <div class="card-header pink">📌 <span class="i18n" data-ko="투자 분류" data-en="Investment Classification">투자 분류</span></div>
       <div class="card-body">
         <div class="form-group">
-          <div class="form-label">💼 투자 유형</div>
+          <div class="form-label">💼 <span class="i18n" data-ko="투자 유형" data-en="Investment Type">투자 유형</span></div>
           <div class="toggle-group">
-            <div class="toggle-btn {%- if not edit_data or edit_data[1]=='확장' %} active{%- endif -%}" onclick="selectType(this,'확장')">확장</div>
-            <div class="toggle-btn {%- if edit_data and edit_data[1]=='경상' %} active{%- endif -%}" onclick="selectType(this,'경상')">경상</div>
+            <div class="toggle-btn {%- if not edit_data or edit_data[1]=='확장' %} active{%- endif -%}" onclick="selectType(this,'확장')"><span class="i18n" data-ko="확장" data-en="Expansion">확장</span></div>
+            <div class="toggle-btn {%- if edit_data and edit_data[1]=='경상' %} active{%- endif -%}" onclick="selectType(this,'경상')"><span class="i18n" data-ko="경상" data-en="Recurring">경상</span></div>
           </div>
           <input type="hidden" name="invest_type" id="invest_type" value="{%- if edit_data -%}{{ edit_data[1] or '확장' }}{%- else -%}확장{%- endif -%}">
         </div>
         <div class="form-row">
           <div class="form-group">
-            <div class="form-label">📦 제품</div>
+            <div class="form-label">📦 <span class="i18n" data-ko="제품" data-en="Product">제품</span></div>
             <select name="product" id="product" onchange="updateCorporations()">
               {%- for p in products -%}<option {%- if edit_data and edit_data[2]==p %} selected{%- endif -%}>{{ p }}</option>{%- endfor -%}
             </select>
           </div>
           <div class="form-group">
-            <div class="form-label">🌍 법인</div>
+            <div class="form-label">🌍 <span class="i18n" data-ko="법인" data-en="Corporation">법인</span></div>
             <select name="corporation" id="corporation"></select>
           </div>
         </div>
@@ -332,16 +331,16 @@ input[readonly]{background:#f1f5f9;border:3px solid #8b5cf6;font-weight:700;colo
       </div>
     </div>
     <div class="card">
-      <div class="card-header cyan">📋 투자 항목 상세</div>
+      <div class="card-header cyan">📋 <span class="i18n" data-ko="투자 항목 상세" data-en="Investment Item Details">투자 항목 상세</span></div>
       <div class="card-body">
         <div class="form-group">
-          <div class="form-label">🎯 투자목적</div>
+          <div class="form-label">🎯 <span class="i18n" data-ko="투자목적" data-en="Investment Purpose">투자목적</span></div>
           <select name="purpose">
             {%- for p in all_purposes -%}<option {%- if edit_data and edit_data[4]==p %} selected{%- endif -%}>{{ p }}</option>{%- endfor -%}
           </select>
         </div>
         <div class="form-group">
-          <div class="form-label">📝 투자항목</div>
+          <div class="form-label">📝 <span class="i18n" data-ko="투자항목" data-en="Investment Item">투자항목</span></div>
           <input type="text" name="invest_item" value="{%- if edit_data -%}{{ edit_data[5] or '' }}{%- endif -%}" placeholder="예: 창원 선진화 오븐라인">
         </div>
         <div class="info-box">
@@ -352,71 +351,71 @@ input[readonly]{background:#f1f5f9;border:3px solid #8b5cf6;font-weight:700;colo
     </div>
   </div>
   <div class="card card-full">
-    <div class="card-header amber">📅 투자 주요 일정</div>
+    <div class="card-header amber">📅 <span class="i18n" data-ko="투자 주요 일정" data-en="Investment Schedule">투자 주요 일정</span></div>
     <div class="card-body">
       <div class="form-row">
-        <div class="form-group"><div class="form-label">🎯 발주 목표</div><input type="month" name="order_target" value="{%- if edit_data -%}{{ edit_data[6] or '' }}{%- endif -%}"></div>
-        <div class="form-group"><div class="form-label">✅ 발주 실적</div><input type="month" name="order_actual" value="{%- if edit_data -%}{{ edit_data[7] or '' }}{%- endif -%}"></div>
+        <div class="form-group"><div class="form-label">🎯 <span class="i18n" data-ko="발주 목표" data-en="Order Target">발주 목표</span></div><input type="month" name="order_target" value="{%- if edit_data -%}{{ edit_data[6] or '' }}{%- endif -%}"></div>
+        <div class="form-group"><div class="form-label">✅ <span class="i18n" data-ko="발주 실적" data-en="Order Actual">발주 실적</span></div><input type="month" name="order_actual" value="{%- if edit_data -%}{{ edit_data[7] or '' }}{%- endif -%}"></div>
       </div>
       <div class="form-row">
-        <div class="form-group"><div class="form-label">🎯 셋업 목표</div><input type="month" name="setup_target" value="{%- if edit_data -%}{{ edit_data[8] or '' }}{%- endif -%}"></div>
-        <div class="form-group"><div class="form-label">✅ 셋업 실적</div><input type="month" name="setup_actual" value="{%- if edit_data -%}{{ edit_data[9] or '' }}{%- endif -%}"></div>
+        <div class="form-group"><div class="form-label">🎯 <span class="i18n" data-ko="셋업 목표" data-en="Setup Target">셋업 목표</span></div><input type="month" name="setup_target" value="{%- if edit_data -%}{{ edit_data[8] or '' }}{%- endif -%}"></div>
+        <div class="form-group"><div class="form-label">✅ <span class="i18n" data-ko="셋업 실적" data-en="Setup Actual">셋업 실적</span></div><input type="month" name="setup_actual" value="{%- if edit_data -%}{{ edit_data[9] or '' }}{%- endif -%}"></div>
       </div>
       <div class="form-row">
-        <div class="form-group"><div class="form-label">🎯 양산 목표</div><input type="month" name="mass_target" value="{%- if edit_data -%}{{ edit_data[10] or '' }}{%- endif -%}"></div>
-        <div class="form-group"><div class="form-label">✅ 양산 실적</div><input type="month" name="mass_actual" value="{%- if edit_data -%}{{ edit_data[11] or '' }}{%- endif -%}"></div>
+        <div class="form-group"><div class="form-label">🎯 <span class="i18n" data-ko="양산 목표" data-en="Mass Prod. Target">양산 목표</span></div><input type="month" name="mass_target" value="{%- if edit_data -%}{{ edit_data[10] or '' }}{%- endif -%}"></div>
+        <div class="form-group"><div class="form-label">✅ <span class="i18n" data-ko="양산 실적" data-en="Mass Prod. Actual">양산 실적</span></div><input type="month" name="mass_actual" value="{%- if edit_data -%}{{ edit_data[11] or '' }}{%- endif -%}"></div>
       </div>
       <div class="form-group">
-        <div class="form-label">❓ 연기사유</div>
+        <div class="form-label">❓ <span class="i18n" data-ko="연기사유" data-en="Delay Reason">연기사유</span></div>
         <input type="text" name="delay_reason" value="{%- if edit_data -%}{{ edit_data[12] or '' }}{%- endif -%}" placeholder="예: 제품개발 지연에 따른 양산 일정">
       </div>
     </div>
   </div>
   <div class="row" style="margin-top:24px">
     <div class="card">
-      <div class="card-header blue">💰 투자금액 (단위: 억원)</div>
+      <div class="card-header blue">💰 <span class="i18n" data-ko="투자금액 (단위: 억원)" data-en="Investment Amount (unit: 100M KRW)">투자금액 (단위: 억원)</span></div>
       <div class="card-body">
-        <div class="form-group"><div class="form-label">💵 Base 금액</div><input type="number" name="base_amount" step="0.01" value="{%- if edit_data -%}{{ edit_data[13] or '' }}{%- endif -%}" placeholder="0.00"></div>
+        <div class="form-group"><div class="form-label">💵 <span class="i18n" data-ko="Base 금액" data-en="Base Amount">Base 금액</span></div><input type="number" name="base_amount" step="0.01" value="{%- if edit_data -%}{{ edit_data[13] or '' }}{%- endif -%}" placeholder="0.00"></div>
         <div class="form-row">
-          <div class="form-group"><div class="form-label">🎯 발주가 목표</div><input type="number" name="order_price_target" step="0.01" value="{%- if edit_data -%}{{ edit_data[14] or '' }}{%- endif -%}" placeholder="0.00"></div>
-          <div class="form-group"><div class="form-label">✅ 발주가 실적</div><input type="number" name="order_price_actual" step="0.01" value="{%- if edit_data -%}{{ edit_data[15] or '' }}{%- endif -%}" placeholder="0.00"></div>
+          <div class="form-group"><div class="form-label">🎯 <span class="i18n" data-ko="발주가 목표" data-en="Order Price Target">발주가 목표</span></div><input type="number" name="order_price_target" step="0.01" value="{%- if edit_data -%}{{ edit_data[14] or '' }}{%- endif -%}" placeholder="0.00"></div>
+          <div class="form-group"><div class="form-label">✅ <span class="i18n" data-ko="발주가 실적" data-en="Order Price Actual">발주가 실적</span></div><input type="number" name="order_price_actual" step="0.01" value="{%- if edit_data -%}{{ edit_data[15] or '' }}{%- endif -%}" placeholder="0.00"></div>
         </div>
       </div>
     </div>
     <div class="card">
-      <div class="card-header violet">📊 절감 실적 (단위: 억원)</div>
+      <div class="card-header violet">📊 <span class="i18n" data-ko="절감 실적 (단위: 억원)" data-en="Savings Performance (unit: 100M KRW)">절감 실적 (단위: 억원)</span></div>
       <div class="card-body">
         <div class="form-row">
-          <div class="form-group"><div class="form-label">🎯 절감 목표</div><input type="number" name="saving_target" step="0.01" value="{%- if edit_data -%}{{ edit_data[16] or '' }}{%- endif -%}" placeholder="0.00"></div>
-          <div class="form-group"><div class="form-label">✅ 절감 실적 (자동계산)</div><input id="saving_actual" name="saving_actual" readonly value="{%- if edit_data -%}{{ edit_data[17] or '' }}{%- endif -%}" placeholder="0.00"></div>
+          <div class="form-group"><div class="form-label">🎯 <span class="i18n" data-ko="절감 목표" data-en="Savings Target">절감 목표</span></div><input type="number" name="saving_target" step="0.01" value="{%- if edit_data -%}{{ edit_data[16] or '' }}{%- endif -%}" placeholder="0.00"></div>
+          <div class="form-group"><div class="form-label">✅ <span class="i18n" data-ko="절감 실적 (자동계산)" data-en="Savings Actual (auto)">절감 실적 (자동계산)</span></div><input id="saving_actual" name="saving_actual" readonly value="{%- if edit_data -%}{{ edit_data[17] or '' }}{%- endif -%}" placeholder="0.00"></div>
         </div>
         <div class="info-box"><div class="info-box-title">💡 절감 실적은 아래 세부 항목 합계가 자동 계산됩니다</div></div>
       </div>
     </div>
   </div>
   <div class="card card-full">
-    <div class="card-header emerald">📊 투자비 절감 활동 실적 (단위: 억원)</div>
+    <div class="card-header emerald">📊 <span class="i18n" data-ko="투자비 절감 활동 실적 (단위: 억원)" data-en="Cost Reduction Activities (unit: 100M KRW)">투자비 절감 활동 실적 (단위: 억원)</span></div>
     <div class="card-body">
       <div class="table-wrapper">
         <table class="reduce-table">
           <thead>
             <tr>
-              <th style="width:110px">항목</th>
-              <th style="width:100px">활동 합계</th>
-              <th><span class="reduce-number">①</span>신기술<br>신공법</th>
-              <th><span class="reduce-number">②</span>염가형<br>부품</th>
-              <th><span class="reduce-number">③</span>중국/<br>Local 설비</th>
-              <th><span class="reduce-number">④</span>중국/한국<br>Collabo</th>
-              <th><span class="reduce-number">⑤</span>컨테이너<br>최소화</th>
-              <th><span class="reduce-number">⑥</span>출장 인원<br>최소화</th>
-              <th><span class="reduce-number">⑦</span>유휴<br>설비</th>
-              <th><span class="reduce-number">⑧</span>사양<br>최적화</th>
-              <th><span class="reduce-number">⑨</span>기타</th>
+              <th style="width:110px"><span class="i18n" data-ko="항목" data-en="Item">항목</span></th>
+              <th style="width:100px"><span class="i18n" data-ko="활동 합계" data-en="Total">활동 합계</span></th>
+              <th><span class="reduce-number">①</span><span class="i18n" data-ko="신기술&#10;신공법" data-en="New Tech">신기술<br>신공법</span></th>
+              <th><span class="reduce-number">②</span><span class="i18n" data-ko="염가형&#10;부품" data-en="Low-cost&#10;Parts">염가형<br>부품</span></th>
+              <th><span class="reduce-number">③</span><span class="i18n" data-ko="중국/&#10;Local 설비" data-en="China/&#10;Local Equip">중국/<br>Local 설비</span></th>
+              <th><span class="reduce-number">④</span><span class="i18n" data-ko="중국/한국&#10;Collabo" data-en="CN/KR&#10;Collabo">중국/한국<br>Collabo</span></th>
+              <th><span class="reduce-number">⑤</span><span class="i18n" data-ko="컨테이너&#10;최소화" data-en="Container&#10;Min.">컨테이너<br>최소화</span></th>
+              <th><span class="reduce-number">⑥</span><span class="i18n" data-ko="출장 인원&#10;최소화" data-en="Travel&#10;Min.">출장 인원<br>최소화</span></th>
+              <th><span class="reduce-number">⑦</span><span class="i18n" data-ko="유휴&#10;설비" data-en="Idle&#10;Equip">유휴<br>설비</span></th>
+              <th><span class="reduce-number">⑧</span><span class="i18n" data-ko="사양&#10;최적화" data-en="Spec&#10;Optimize">사양<br>최적화</span></th>
+              <th><span class="reduce-number">⑨</span><span class="i18n" data-ko="기타" data-en="Others">기타</span></th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td>절감 실적</td>
+              <td><span class="i18n" data-ko="절감 실적" data-en="Savings">절감 실적</span></td>
               <td><input id="total_display" readonly value="{%- if edit_data -%}{{ edit_data[27] or '0.00' }}{%- else -%}0.00{%- endif -%}"></td>
               {%- for i in range(18,27) -%}
               <td><input class="reduce" type="number" name="reduce_{{ i-17 }}" step="0.01" value="{%- if edit_data -%}{{ edit_data[i] or '' }}{%- endif -%}" oninput="calcTotal()"></td>
@@ -426,15 +425,15 @@ input[readonly]{background:#f1f5f9;border:3px solid #8b5cf6;font-weight:700;colo
         </table>
       </div>
       <div class="activity-section">
-        <div class="activity-label">📝 활동내용</div>
+        <div class="activity-label">📝 <span class="i18n" data-ko="활동내용" data-en="Activity Details">활동내용</span></div>
         <textarea name="activity" placeholder="절감 활동 내용을 상세히 입력하세요">{%- if edit_data -%}{{ edit_data[28] or '' }}{%- endif -%}</textarea>
       </div>
     </div>
   </div>
   <input type="hidden" name="saving_total" id="saving_total" value="{%- if edit_data -%}{{ edit_data[27] or '' }}{%- endif -%}">
   <div class="button-group">
-    <button type="submit" class="btn-primary">💾 저장하기</button>
-    <a href="/list" class="btn-secondary">📊 투자실적 조회</a>
+    <button type="submit" class="btn-primary">💾 <span class="i18n" data-ko="저장하기" data-en="Save">저장하기</span></button>
+    <a href="/list" class="btn-secondary">📊 <span class="i18n" data-ko="투자실적 조회" data-en="View Records">투자실적 조회</span></a>
   </div>
   </form>
 </div>
@@ -461,7 +460,15 @@ function calcTotal(){
   document.getElementById("saving_total").value=t;
   document.getElementById("total_display").value=t;
 }
-window.onload=function(){updateCorporations();if(EDIT_CORPORATION)document.getElementById('corporation').value=EDIT_CORPORATION;calcTotal();}
+/* i18n: read lang from localStorage */
+function applyLang(){
+  const lang = localStorage.getItem('app_lang') || 'ko';
+  document.querySelectorAll('.i18n').forEach(el=>{
+    const txt = el.getAttribute('data-'+lang);
+    if(txt) el.innerHTML = txt.replace(/\n/g,'<br>');
+  });
+}
+window.onload=function(){updateCorporations();if(EDIT_CORPORATION)document.getElementById('corporation').value=EDIT_CORPORATION;calcTotal();applyLang();}
 </script>
 </body>
 </html>"""
@@ -479,10 +486,30 @@ body{font-family:'Noto Sans KR',sans-serif;background:#eef0f4;display:flex;min-h
 
 /* ── 사이드바 ── */
 .sidebar{width:230px;min-height:100vh;background:linear-gradient(180deg,#1e2a45 0%,#0f1724 100%);display:flex;flex-direction:column;position:fixed;top:0;left:0;z-index:100;box-shadow:3px 0 15px rgba(0,0,0,0.3)}
-.logo-wrap{padding:22px 18px 18px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;align-items:center}
-.logo-brand{display:flex;flex-direction:row;align-items:baseline;gap:6px}
-.logo-lg-text{font-size:30px;font-weight:900;color:#e8002d;letter-spacing:2px;font-family:Arial,sans-serif;line-height:1}
-.logo-sub{font-size:22px;font-weight:700;color:white;letter-spacing:1px;font-family:'Noto Sans KR',sans-serif;line-height:1}
+
+/* ── [수정1] LG전자 로고: LG 빨간 원형 아이콘 + 회색 텍스트 (공식 로고 스타일) ── */
+.logo-wrap{padding:22px 18px 18px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;gap:12px}
+.logo-circle{
+  width:44px;height:44px;border-radius:50%;
+  background:radial-gradient(circle at 35% 35%, #f04050 0%, #c8102e 50%, #8b0000 100%);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:inset -2px -2px 6px rgba(0,0,0,0.3), inset 2px 2px 6px rgba(255,255,255,0.2), 0 2px 8px rgba(0,0,0,0.3);
+  position:relative;flex-shrink:0;
+}
+.logo-circle::after{
+  content:'';position:absolute;width:22px;height:22px;border-radius:50%;
+  border:2.5px solid rgba(255,255,255,0.85);border-right-color:transparent;
+  transform:rotate(-30deg);top:8px;left:8px;
+}
+.logo-circle-letter{
+  font-size:16px;font-weight:900;color:white;font-family:Arial,Helvetica,sans-serif;
+  letter-spacing:-1px;position:relative;z-index:1;margin-top:2px;margin-left:1px;
+  text-shadow:0 1px 2px rgba(0,0,0,0.3);
+}
+.logo-text-group{display:flex;align-items:baseline;gap:1px}
+.logo-text-lg{font-size:26px;font-weight:900;color:#d1d5db;letter-spacing:1px;font-family:'Noto Sans KR',Arial,sans-serif;line-height:1}
+.logo-text-sub{font-size:22px;font-weight:700;color:#d1d5db;font-family:'Noto Sans KR',sans-serif;line-height:1}
+
 .menu-section{padding:16px 0;flex:1}
 .menu-label{font-size:11px;font-weight:700;color:#4a5568;text-transform:uppercase;letter-spacing:1px;padding:8px 20px}
 .menu-item{display:flex;align-items:center;gap:12px;padding:14px 20px;color:#a0aec0;text-decoration:none;font-size:14px;font-weight:500;transition:all 0.2s;border-left:3px solid transparent}
@@ -502,6 +529,17 @@ body{font-family:'Noto Sans KR',sans-serif;background:#eef0f4;display:flex;min-h
 .filter-label{font-size:12px;font-weight:700;color:#718096;text-transform:uppercase}
 .filter-group select{padding:9px 16px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:14px;font-family:'Noto Sans KR',sans-serif;min-width:140px;background:#f8fafc;cursor:pointer}
 .filter-group select:focus{outline:none;border-color:#667eea}
+
+/* ── [수정2] 언어 토글 버튼 ── */
+.lang-toggle{
+  margin-left:auto;display:flex;align-items:center;gap:8px;
+  background:#f1f5f9;border-radius:24px;padding:4px;border:1.5px solid #e2e8f0;
+}
+.lang-btn{
+  padding:7px 16px;border-radius:20px;font-size:13px;font-weight:700;
+  cursor:pointer;border:none;background:transparent;color:#718096;transition:all 0.25s;
+}
+.lang-btn.active{background:#667eea;color:#fff;box-shadow:0 2px 8px rgba(102,126,234,0.3)}
 
 /* ── KPI 카드 ── */
 .kpi-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-bottom:20px}
@@ -532,6 +570,19 @@ body{font-family:'Noto Sans KR',sans-serif;background:#eef0f4;display:flex;min-h
 .chart-wrap.pie{height:260px}
 .chart-wrap.monthly{height:300px}
 .chart-wrap.activity{height:360px}
+
+/* ── [수정5] 투자유형별 Total 3D/shadow 효과 ── */
+.invest-type-total-wrap{
+  position:relative;border-right:2px dashed #e2e8f0;padding-right:8px;height:100%;
+  background:linear-gradient(145deg,#f8fafc 0%,#eef1f6 100%);
+  border-radius:12px;
+  box-shadow:4px 4px 12px rgba(0,0,0,0.1), -2px -2px 8px rgba(255,255,255,0.8), inset 0 1px 0 rgba(255,255,255,0.6);
+}
+.invest-type-total-label{
+  font-size:14px;font-weight:800;color:#1e293b;text-align:center;margin-bottom:6px;padding-top:4px;
+  text-shadow:1px 1px 2px rgba(0,0,0,0.08);
+  letter-spacing:1px;
+}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
@@ -539,22 +590,26 @@ body{font-family:'Noto Sans KR',sans-serif;background:#eef0f4;display:flex;min-h
 
 <!-- 사이드바 -->
 <div class="sidebar">
+  <!-- [수정1] LG전자 로고 - 공식 스타일 -->
   <div class="logo-wrap">
-    <div class="logo-brand">
-      <div class="logo-lg-text">LG</div>
-      <div class="logo-sub">전자</div>
+    <div class="logo-circle">
+      <span class="logo-circle-letter">LG</span>
+    </div>
+    <div class="logo-text-group">
+      <span class="logo-text-lg">LG</span>
+      <span class="logo-text-sub">전자</span>
     </div>
   </div>
   <div class="menu-section">
-    <div class="menu-label">메뉴</div>
+    <div class="menu-label"><span class="i18n" data-ko="메뉴" data-en="Menu">메뉴</span></div>
     <a href="/dashboard" class="menu-item active">
-      <span class="menu-icon">🏠</span><span>대시보드</span>
+      <span class="menu-icon">🏠</span><span class="i18n" data-ko="대시보드" data-en="Dashboard">대시보드</span>
     </a>
     <a href="/list" class="menu-item">
-      <span class="menu-icon">📋</span><span>투자실적 조회</span>
+      <span class="menu-icon">📋</span><span class="i18n" data-ko="투자실적 조회" data-en="View Records">투자실적 조회</span>
     </a>
     <a href="/" class="menu-item">
-      <span class="menu-icon">✏️</span><span>Data 입력</span>
+      <span class="menu-icon">✏️</span><span class="i18n" data-ko="Data 입력" data-en="Data Entry">Data 입력</span>
     </a>
   </div>
 </div>
@@ -562,59 +617,70 @@ body{font-family:'Noto Sans KR',sans-serif;background:#eef0f4;display:flex;min-h
 <!-- 메인 콘텐츠 -->
 <div class="main">
   <div class="topbar">
-    <div class="topbar-title">📊 '26년 설비 투자비 한계돌파 현황</div>
-    <div class="topbar-sub">창원생산기술실</div>
+    <div class="topbar-title">📊 <span class="i18n" data-ko="'26년 설비 투자비 한계돌파 현황" data-en="'26 Facility Investment Breakthrough Status">'26년 설비 투자비 한계돌파 현황</span></div>
+    <div class="topbar-sub"><span class="i18n" data-ko="창원생산기술실" data-en="Changwon Production Tech.">창원생산기술실</span></div>
   </div>
 
-  <!-- 필터 -->
+  <!-- 필터 [수정6] 투자목적 추가 + [수정2] 언어 토글 -->
   <div class="filter-bar">
     <div class="filter-group">
-      <div class="filter-label">제품</div>
+      <div class="filter-label"><span class="i18n" data-ko="제품" data-en="Product">제품</span></div>
       <select id="fProduct" onchange="onProductChange()">
-        <option value="">전체</option>
+        <option value=""><span class="i18n-opt" data-ko="전체" data-en="All">전체</span></option>
         <option>키친</option><option>빌트인쿠킹</option><option>리빙</option><option>부품</option><option>ES</option>
       </select>
     </div>
     <div class="filter-group">
-      <div class="filter-label">법인</div>
+      <div class="filter-label"><span class="i18n" data-ko="법인" data-en="Corp.">법인</span></div>
       <select id="fCorp" onchange="applyFilter()">
         <option value="">전체</option>
       </select>
     </div>
     <div class="filter-group">
-      <div class="filter-label">투자유형</div>
+      <div class="filter-label"><span class="i18n" data-ko="투자유형" data-en="Type">투자유형</span></div>
       <select id="fType" onchange="applyFilter()">
         <option value="">전체</option>
         <option>확장</option><option>경상</option>
       </select>
     </div>
+    <div class="filter-group">
+      <div class="filter-label"><span class="i18n" data-ko="투자목적" data-en="Purpose">투자목적</span></div>
+      <select id="fPurpose" onchange="applyFilter()">
+        <option value="">전체</option>
+      </select>
+    </div>
+    <!-- [수정2] 한/영 토글 -->
+    <div class="lang-toggle">
+      <button class="lang-btn active" id="langKo" onclick="setLang('ko')">🇰🇷 한글</button>
+      <button class="lang-btn" id="langEn" onclick="setLang('en')">🇺🇸 ENG</button>
+    </div>
   </div>
 
-  <!-- KPI 카드 6개 -->
+  <!-- KPI 카드 6개 [수정4] 라벨 변경: '확장투자 건수' → '건수', 배지: '확장' → '확장 투자' -->
   <div class="kpi-grid">
     <div class="kpi-card expand">
-      <div class="kpi-top"><div class="kpi-label">확장투자 건수</div><div class="kpi-badge expand">확장</div></div>
-      <div><span class="kpi-value" id="kExpCnt">0</span><span class="kpi-unit">건</span></div>
+      <div class="kpi-top"><div class="kpi-label"><span class="i18n" data-ko="건수" data-en="Count">건수</span></div><div class="kpi-badge expand"><span class="i18n" data-ko="확장 투자" data-en="Expansion">확장 투자</span></div></div>
+      <div><span class="kpi-value" id="kExpCnt">0</span><span class="kpi-unit"><span class="i18n" data-ko="건" data-en="cases">건</span></span></div>
     </div>
     <div class="kpi-card expand">
-      <div class="kpi-top"><div class="kpi-label">확장투자 Base</div><div class="kpi-badge expand">확장</div></div>
-      <div><span class="kpi-value" id="kExpBase">0</span><span class="kpi-unit">억원</span></div>
+      <div class="kpi-top"><div class="kpi-label">Base</div><div class="kpi-badge expand"><span class="i18n" data-ko="확장 투자" data-en="Expansion">확장 투자</span></div></div>
+      <div><span class="kpi-value" id="kExpBase">0</span><span class="kpi-unit"><span class="i18n" data-ko="억원" data-en="100M">억원</span></span></div>
     </div>
     <div class="kpi-card expand">
-      <div class="kpi-top"><div class="kpi-label">확장투자 절감실적</div><div class="kpi-badge expand">확장</div></div>
-      <div><span class="kpi-value" id="kExpSave">0</span><span class="kpi-unit">억원</span></div>
+      <div class="kpi-top"><div class="kpi-label"><span class="i18n" data-ko="절감실적" data-en="Savings">절감실적</span></div><div class="kpi-badge expand"><span class="i18n" data-ko="확장 투자" data-en="Expansion">확장 투자</span></div></div>
+      <div><span class="kpi-value" id="kExpSave">0</span><span class="kpi-unit"><span class="i18n" data-ko="억원" data-en="100M">억원</span></span></div>
     </div>
     <div class="kpi-card normal">
-      <div class="kpi-top"><div class="kpi-label">경상투자 건수</div><div class="kpi-badge normal">경상</div></div>
-      <div><span class="kpi-value" id="kNorCnt">0</span><span class="kpi-unit">건</span></div>
+      <div class="kpi-top"><div class="kpi-label"><span class="i18n" data-ko="건수" data-en="Count">건수</span></div><div class="kpi-badge normal"><span class="i18n" data-ko="경상 투자" data-en="Recurring">경상 투자</span></div></div>
+      <div><span class="kpi-value" id="kNorCnt">0</span><span class="kpi-unit"><span class="i18n" data-ko="건" data-en="cases">건</span></span></div>
     </div>
     <div class="kpi-card normal">
-      <div class="kpi-top"><div class="kpi-label">경상투자 Base</div><div class="kpi-badge normal">경상</div></div>
-      <div><span class="kpi-value" id="kNorBase">0</span><span class="kpi-unit">억원</span></div>
+      <div class="kpi-top"><div class="kpi-label">Base</div><div class="kpi-badge normal"><span class="i18n" data-ko="경상 투자" data-en="Recurring">경상 투자</span></div></div>
+      <div><span class="kpi-value" id="kNorBase">0</span><span class="kpi-unit"><span class="i18n" data-ko="억원" data-en="100M">억원</span></span></div>
     </div>
     <div class="kpi-card normal">
-      <div class="kpi-top"><div class="kpi-label">경상투자 절감실적</div><div class="kpi-badge normal">경상</div></div>
-      <div><span class="kpi-value" id="kNorSave">0</span><span class="kpi-unit">억원</span></div>
+      <div class="kpi-top"><div class="kpi-label"><span class="i18n" data-ko="절감실적" data-en="Savings">절감실적</span></div><div class="kpi-badge normal"><span class="i18n" data-ko="경상 투자" data-en="Recurring">경상 투자</span></div></div>
+      <div><span class="kpi-value" id="kNorSave">0</span><span class="kpi-unit"><span class="i18n" data-ko="억원" data-en="100M">억원</span></span></div>
     </div>
   </div>
 
@@ -622,29 +688,29 @@ body{font-family:'Noto Sans KR',sans-serif;background:#eef0f4;display:flex;min-h
   <div class="chart-grid chart-row-2" style="margin-bottom:20px">
     <div class="chart-card">
       <div class="chart-header">
-        <div class="chart-title"><span style="font-size:17px;margin-right:2px">💰</span>전체 Base 대비 절감 실적</div>
+        <div class="chart-title"><span style="font-size:17px;margin-right:2px">💰</span><span class="i18n" data-ko="전체 Base 대비 절감 실적" data-en="Total Base vs Savings">전체 Base 대비 절감 실적</span></div>
       </div>
       <div class="chart-wrap"><canvas id="cBaseTotal"></canvas></div>
     </div>
     <div class="chart-card">
       <div class="chart-header">
-        <div class="chart-title"><span style="font-size:17px;margin-right:2px">📦</span>제품별 Base 대비 절감 실적</div>
+        <div class="chart-title"><span style="font-size:17px;margin-right:2px">📦</span><span class="i18n" data-ko="제품별 Base 대비 절감 실적" data-en="Product Base vs Savings">제품별 Base 대비 절감 실적</span></div>
       </div>
       <div class="chart-wrap"><canvas id="cBaseProduct"></canvas></div>
     </div>
   </div>
 
-  <!-- 차트 행 2: 투자유형별 절감실적 — 왼쪽(전체 확장/경상) + 오른쪽(제품별 확장/경상) -->
+  <!-- 차트 행 2: 투자유형별 절감실적 -->
   <div class="chart-grid chart-row-4" style="margin-bottom:20px">
     <div class="chart-card">
       <div class="chart-header">
-        <div class="chart-title"><span style="font-size:17px;margin-right:2px">📊</span>투자유형별 절감 실적</div>
+        <div class="chart-title"><span style="font-size:17px;margin-right:2px">📊</span><span class="i18n" data-ko="투자유형별 절감 실적" data-en="Savings by Investment Type">투자유형별 절감 실적</span></div>
       </div>
-      <div style="display:grid;grid-template-columns:220px 1fr;gap:0;height:320px;align-items:stretch">
-        <!-- 왼쪽: 전체 확장/경상 -->
-        <div style="position:relative;border-right:2px dashed #e2e8f0;padding-right:8px;height:100%">
-          <div style="font-size:13px;font-weight:700;color:#64748b;text-align:center;margin-bottom:6px">Total</div>
-          <div style="position:relative;height:calc(100% - 26px)">
+      <div style="display:grid;grid-template-columns:240px 1fr;gap:0;height:320px;align-items:stretch">
+        <!-- [수정5] 왼쪽: Total - 그림자/3D 효과 적용 -->
+        <div class="invest-type-total-wrap">
+          <div class="invest-type-total-label">Total</div>
+          <div style="position:relative;height:calc(100% - 30px)">
             <canvas id="cInvestTypeTotal"></canvas>
           </div>
         </div>
@@ -662,13 +728,13 @@ body{font-family:'Noto Sans KR',sans-serif;background:#eef0f4;display:flex;min-h
   <div class="chart-grid chart-row-3" style="margin-bottom:20px">
     <div class="chart-card">
       <div class="chart-header">
-        <div class="chart-title"><span style="font-size:17px;margin-right:2px">🔧</span>절감 활동별 절감 실적</div>
+        <div class="chart-title"><span style="font-size:17px;margin-right:2px">🔧</span><span class="i18n" data-ko="절감 활동별 절감 실적" data-en="Savings by Activity">절감 활동별 절감 실적</span></div>
       </div>
       <div class="chart-wrap activity"><canvas id="cActivity"></canvas></div>
     </div>
     <div class="chart-card">
       <div class="chart-header">
-        <div class="chart-title"><span style="font-size:17px;margin-right:2px">🥧</span>제품별 절감 실적</div>
+        <div class="chart-title"><span style="font-size:17px;margin-right:2px">🥧</span><span class="i18n" data-ko="제품별 절감 실적" data-en="Savings by Product">제품별 절감 실적</span></div>
       </div>
       <div class="chart-wrap pie"><canvas id="cPie"></canvas></div>
     </div>
@@ -678,7 +744,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:#eef0f4;display:flex;min-h
   <div class="chart-grid chart-row-4" style="margin-bottom:20px">
     <div class="chart-card">
       <div class="chart-header">
-        <div class="chart-title"><span style="font-size:17px;margin-right:2px">🌍</span>법인별 절감 목표 및 실적</div>
+        <div class="chart-title"><span style="font-size:17px;margin-right:2px">🌍</span><span class="i18n" data-ko="법인별 절감 목표 및 실적" data-en="Corp. Savings Target vs Actual">법인별 절감 목표 및 실적</span></div>
       </div>
       <div class="chart-wrap tall"><canvas id="cCorp"></canvas></div>
     </div>
@@ -688,7 +754,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:#eef0f4;display:flex;min-h
   <div class="chart-grid chart-row-4" style="margin-bottom:20px">
     <div class="chart-card">
       <div class="chart-header">
-        <div class="chart-title"><span style="font-size:17px;margin-right:2px">📅</span>월별 절감 실적 (2026년)</div>
+        <div class="chart-title"><span style="font-size:17px;margin-right:2px">📅</span><span class="i18n" data-ko="월별 절감 실적 (2026년)" data-en="Monthly Savings (2026)">월별 절감 실적 (2026년)</span></div>
       </div>
       <div class="chart-wrap monthly"><canvas id="cMonthly"></canvas></div>
     </div>
@@ -699,9 +765,9 @@ body{font-family:'Noto Sans KR',sans-serif;background:#eef0f4;display:flex;min-h
 const ALL_DATA = {{ processed_json | safe }};
 const CORPS_MAP = {{ corporations_json | safe }};
 const MONTHLY_DATA = {{ monthly_json | safe }};
+const ALL_PURPOSES = {{ all_purposes_json | safe }};
 const PRODUCTS = ['키친','빌트인쿠킹','리빙','부품','ES'];
 
-// 전체 법인 목록 (KR 맨 앞, 나머지 알파벳 순)
 const ALL_CORPS_ORDERED = (function(){
   const all = new Set();
   Object.values(CORPS_MAP).forEach(arr => arr.forEach(c => all.add(c)));
@@ -714,6 +780,34 @@ Chart.defaults.font.size = 13;
 
 let filtered = [...ALL_DATA];
 let charts = {};
+
+/* ── [수정2] 언어 전환 ── */
+function setLang(lang){
+  localStorage.setItem('app_lang', lang);
+  document.getElementById('langKo').classList.toggle('active', lang==='ko');
+  document.getElementById('langEn').classList.toggle('active', lang==='en');
+  applyLang();
+}
+function applyLang(){
+  const lang = localStorage.getItem('app_lang') || 'ko';
+  document.getElementById('langKo').classList.toggle('active', lang==='ko');
+  document.getElementById('langEn').classList.toggle('active', lang==='en');
+  document.querySelectorAll('.i18n').forEach(el=>{
+    const txt = el.getAttribute('data-'+lang);
+    if(txt) el.innerHTML = txt.replace(/\n/g,'<br>');
+  });
+}
+
+/* ── [수정6] 투자목적 필터 초기화 ── */
+function initPurposeFilter(){
+  const sel = document.getElementById('fPurpose');
+  sel.innerHTML = '<option value="">전체</option>';
+  ALL_PURPOSES.forEach(p=>{
+    const o = document.createElement('option');
+    o.value = o.textContent = p;
+    sel.appendChild(o);
+  });
+}
 
 /* ── 법인 필터 초기화 ── */
 function initCorpFilter(product){
@@ -743,8 +837,9 @@ function applyFilter(){
   const p = document.getElementById('fProduct').value;
   const c = document.getElementById('fCorp').value;
   const t = document.getElementById('fType').value;
+  const pu = document.getElementById('fPurpose').value;
   filtered = ALL_DATA.filter(r =>
-    (!p || r[2]===p) && (!c || r[3]===c) && (!t || r[1]===t)
+    (!p || r[2]===p) && (!c || r[3]===c) && (!t || r[1]===t) && (!pu || r[4]===pu)
   );
   renderAll();
 }
@@ -776,22 +871,11 @@ const PALETTE = {
   orange:'rgba(249,115,22,0.85)',
 };
 
-/* 막대 위 레이블 플러그인 공통 옵션 */
-const DATALABELS_PLUGIN = {
-  anchor:'end', align:'top',
-  formatter: v => v > 0 ? v.toFixed(1) : '',
-  font:{size:12, weight:'600'},
-  color:'#374151',
-  padding:{bottom:2}
-};
-
 function mk(id, cfg){
   if(charts[id]) charts[id].destroy();
   charts[id] = new Chart(document.getElementById(id), cfg);
 }
 
-/* Chart.js v4 에서 datalabels는 별도 플러그인이 필요하므로
-   afterDraw 방식으로 직접 막대 위 값 표시 */
 const barLabelPlugin = {
   id:'barLabel',
   afterDatasetsDraw(chart){
@@ -823,6 +907,7 @@ const barLabelPlugin = {
 };
 Chart.register(barLabelPlugin);
 
+/* [수정3] 범례-그래프 간격 넓힘: legend padding 추가 */
 /* 1. 전체 Base 대비 절감 */
 function chart_BaseTotal(){
   const totalBase = sum(filtered,13);
@@ -837,7 +922,8 @@ function chart_BaseTotal(){
       ]
     },
     options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{position:'top',labels:{font:{size:13}}},
+      layout:{padding:{top:20}},
+      plugins:{legend:{position:'top',labels:{font:{size:13},padding:18}},
         tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.raw.toFixed(2)}억원`}}},
       scales:{y:{beginAtZero:true,title:{display:true,text:'억원',font:{size:13}},
         ticks:{font:{size:12}}}}}
@@ -858,7 +944,8 @@ function chart_BaseProduct(){
       ]
     },
     options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{position:'top',labels:{font:{size:13}}},
+      layout:{padding:{top:20}},
+      plugins:{legend:{position:'top',labels:{font:{size:13},padding:18}},
         tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.raw.toFixed(2)}억원`}}},
       scales:{y:{beginAtZero:true,title:{display:true,text:'억원',font:{size:13}},
         ticks:{font:{size:12}}}}}
@@ -895,7 +982,6 @@ function chart_InvestTypeTotal(){
 
 /* 3. 투자유형별 — 제품별(오른쪽) */
 function chart_InvestTypeProduct(){
-  // labels: ['키친', '빌트인쿠킹', '리빙', 'ES', '부품'] 각 그룹 안에 확장/경상
   const groupLabels = PRODUCTS;
   const expTgtArr=[], expActArr=[], norTgtArr=[], norActArr=[];
   PRODUCTS.forEach(p=>{
@@ -971,9 +1057,8 @@ function chart_Pie(){
   });
 }
 
-/* 6. 법인별 절감 목표/실적 — 전체 법인 표시, KR 맨 앞 */
+/* 6. 법인별 */
 function chart_Corp(){
-  // 필터된 데이터 기반으로 집계 (0이어도 전체 법인 표시)
   const corpTgt={}, corpAct={};
   ALL_CORPS_ORDERED.forEach(c=>{corpTgt[c]=0; corpAct[c]=0;});
   filtered.forEach(r=>{
@@ -1002,30 +1087,24 @@ function chart_Corp(){
   });
 }
 
-/* 7. 월별 절감 실적 — 막대(목표/실적) + 누적 꺾은선 */
+/* 7. 월별 절감 실적 */
 function chart_Monthly(){
   const labels = MONTHLY_DATA.labels;
   const tgt = MONTHLY_DATA.target;
   const act = MONTHLY_DATA.actual;
-
-  // 누적 계산
   const cumTgt=[], cumAct=[];
   let st=0, sa=0;
   for(let i=0;i<12;i++){
     st += tgt[i]; cumTgt.push(parseFloat(st.toFixed(2)));
     sa += act[i]; cumAct.push(parseFloat(sa.toFixed(2)));
   }
-
   const maxBar = Math.max(...tgt, ...act, 1);
   const maxCum = Math.max(...cumTgt, ...cumAct, 1);
-
   mk('cMonthly',{
     type:'bar',
     data:{
       labels,
       datasets:[
-        // Chart.js: order 높을수록 위(앞)에 렌더링
-        // 막대: order 1,2 (하단) / 누적선: order 3,4 (막대 위에 렌더링)
         {type:'bar', label:'절감 목표', data:tgt, order:1,
           backgroundColor:PALETTE.grayL, borderColor:PALETTE.gray,
           borderWidth:2, borderRadius:4, yAxisID:'y'},
@@ -1050,24 +1129,13 @@ function chart_Monthly(){
         legend:{
           position:'top',
           align:'center',
-          labels:{
-            font:{size:13}, boxWidth:14, padding:20,
-            // 범례 순서 재정렬: 절감목표→절감실적→누적목표→누적실적
-            generateLabels: function(chart){
-              const orig = Chart.defaults.plugins.legend.labels.generateLabels(chart);
-              // datasets 순서: bar목표(0), bar실적(1), line목표(2), line실적(3)
-              // 원하는 범례 순서: bar목표→bar실적→line목표→line실적 = 그대로
-              return orig;
-            }
-          }
+          labels:{font:{size:13}, boxWidth:14, padding:20}
         },
         tooltip:{mode:'index', intersect:false,
           callbacks:{label:c=>`${c.dataset.label}: ${(c.raw||0).toFixed(2)}억원`}}
       },
       scales:{
         x:{ticks:{font:{size:13}}},
-        // 왼쪽 y축: 막대가 차트 아래 절반에 오도록 max를 3배로 설정
-        // → 누적선(y2)과 시각적으로 분리됨
         y:{beginAtZero:true, position:'left',
           max: Math.ceil(maxBar * 3),
           title:{display:true, text:'월별(억원)', font:{size:12}},
@@ -1095,6 +1163,8 @@ function renderAll(){
 
 window.onload = function(){
   initCorpFilter('');
+  initPurposeFilter();
+  applyLang();
   renderAll();
 };
 </script>
@@ -1121,8 +1191,10 @@ body{font-family:'Noto Sans KR','Malgun Gothic',sans-serif;font-size:13px;backgr
 .filter-bar select:focus{border-color:#667eea;outline:none}
 .legend{margin-left:auto;display:flex;gap:16px;align-items:center;font-size:13px}
 .legend-item{display:flex;align-items:center;gap:6px;color:#64748b;font-weight:500}
-.sig{width:16px;height:16px;border-radius:50%;box-shadow:0 2px 4px rgba(0,0,0,0.2)}
-.s-g{background:#10b981}.s-y{background:#fbbf24}.s-x{background:#94a3b8}
+.sig{width:16px;height:16px;border-radius:50%;box-shadow:0 2px 4px rgba(0,0,0,0.2);display:inline-block}
+.s-g{background:radial-gradient(circle at 40% 35%, #34d399, #059669);box-shadow:0 0 6px rgba(16,185,129,0.5)}
+.s-y{background:radial-gradient(circle at 40% 35%, #fcd34d, #f59e0b);box-shadow:0 0 6px rgba(245,158,11,0.5)}
+.s-x{background:radial-gradient(circle at 40% 35%, #d1d5db, #94a3b8);box-shadow:0 0 4px rgba(148,163,184,0.3)}
 .table-container{background:rgba(255,255,255,0.98);border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,0.12);overflow:hidden}
 .table-wrap{overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 220px)}
 table{border-collapse:collapse;white-space:nowrap;min-width:100%;background:#fff}
@@ -1156,34 +1228,42 @@ tr.gh .g-c{background:#5a67d8;border:1px solid #94a3b8}
 .icon-btn{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;cursor:pointer;transition:all 0.3s;border:none;background:#fff;font-size:14px;text-decoration:none;box-shadow:0 2px 4px rgba(0,0,0,0.1)}
 .icon-edit{color:#3b82f6}.icon-edit:hover{background:#3b82f6;color:#fff;transform:scale(1.1)}
 .icon-del{color:#ef4444}.icon-del:hover{background:#ef4444;color:#fff;transform:scale(1.1)}
+/* 언어 토글 (리스트 페이지용) */
+.lang-toggle-list{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.2);border-radius:24px;padding:3px;border:1px solid rgba(255,255,255,0.3)}
+.lang-btn-list{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;border:none;background:transparent;color:rgba(255,255,255,0.7);transition:all 0.25s}
+.lang-btn-list.active{background:rgba(255,255,255,0.95);color:#667eea;box-shadow:0 2px 6px rgba(0,0,0,0.15)}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 <div class="top-header">
-  <h2>📊 설비 투자비 활동 실적 조회</h2>
+  <h2>📊 <span class="i18n" data-ko="설비 투자비 활동 실적 조회" data-en="Facility Investment Performance">설비 투자비 활동 실적 조회</span></h2>
   <div class="top-header-right">
-    <button class="excel-btn" onclick="downloadExcel()">📥 Excel 다운로드</button>
-    <a href="/dashboard">🏠 대시보드</a>
-    <a href="/">◀ 입력 페이지</a>
+    <div class="lang-toggle-list">
+      <button class="lang-btn-list active" id="langKo2" onclick="setLang('ko')">🇰🇷 한글</button>
+      <button class="lang-btn-list" id="langEn2" onclick="setLang('en')">🇺🇸 ENG</button>
+    </div>
+    <button class="excel-btn" onclick="downloadExcel()">📥 Excel</button>
+    <a href="/dashboard">🏠 <span class="i18n" data-ko="대시보드" data-en="Dashboard">대시보드</span></a>
+    <a href="/">◀ <span class="i18n" data-ko="입력 페이지" data-en="Data Entry">입력 페이지</span></a>
   </div>
 </div>
 <div class="filter-bar">
-  <label>제품</label>
+  <label><span class="i18n" data-ko="제품" data-en="Product">제품</span></label>
   <select id="fp" onchange="applyFilter();updateFilterCorps()">
     <option value="">전체</option>
     <option>키친</option><option>빌트인쿠킹</option><option>리빙</option><option>부품</option><option>ES</option>
   </select>
-  <label>법인</label>
+  <label><span class="i18n" data-ko="법인" data-en="Corp.">법인</span></label>
   <select id="fc" onchange="applyFilter()"><option value="">전체</option></select>
-  <label>투자유형</label>
+  <label><span class="i18n" data-ko="투자유형" data-en="Type">투자유형</span></label>
   <select id="ft" onchange="applyFilter()"><option value="">전체</option><option>확장</option><option>경상</option></select>
-  <label>투자목적</label>
+  <label><span class="i18n" data-ko="투자목적" data-en="Purpose">투자목적</span></label>
   <select id="fpu" onchange="applyFilter()"><option value="">전체</option></select>
   <div class="legend">
-    <div class="legend-item"><span class="sig s-g"></span>목표 초과 (HS≥30% / ES≥50%)</div>
-    <div class="legend-item"><span class="sig s-y"></span>목표 미달</div>
-    <div class="legend-item"><span class="sig s-x"></span>미입력</div>
+    <div class="legend-item"><span class="sig s-g"></span><span class="i18n" data-ko="목표 초과 (HS≥30% / ES≥50%)" data-en="Above Target">목표 초과 (HS≥30% / ES≥50%)</span></div>
+    <div class="legend-item"><span class="sig s-y"></span><span class="i18n" data-ko="목표 미달" data-en="Below Target">목표 미달</span></div>
+    <div class="legend-item"><span class="sig s-x"></span><span class="i18n" data-ko="미입력" data-en="No Data">미입력</span></div>
   </div>
 </div>
 <div class="table-container">
@@ -1191,30 +1271,37 @@ tr.gh .g-c{background:#5a67d8;border:1px solid #94a3b8}
     <table id="mainTable">
       <thead>
         <tr class="gh">
-          <th class="sc c0 g-c" colspan="6">투자 분류</th>
-          <th class="g-s" colspan="7">📅 투자 주요 일정</th>
-          <th class="g-v" colspan="4">💰 투자절감</th>
-          <th class="g-r" colspan="11">📊 절감 활동 및 실적</th>
-          <th class="g-e" colspan="3">🎯 목표</th>
+          <th class="sc c0 g-c" colspan="6"><span class="i18n" data-ko="투자 분류" data-en="Classification">투자 분류</span></th>
+          <th class="g-s" colspan="7">📅 <span class="i18n" data-ko="투자 주요 일정" data-en="Schedule">투자 주요 일정</span></th>
+          <th class="g-v" colspan="4">💰 <span class="i18n" data-ko="투자절감" data-en="Savings">투자절감</span></th>
+          <th class="g-r" colspan="11">📊 <span class="i18n" data-ko="절감 활동 및 실적" data-en="Reduction Activities">절감 활동 및 실적</span></th>
+          <th class="g-e" colspan="3">🎯 <span class="i18n" data-ko="목표" data-en="Target">목표</span></th>
         </tr>
         <tr>
-          <th class="sc c0">수정/<br>삭제</th>
-          <th class="sc c1">제품</th><th class="sc c2">법인</th>
-          <th class="sc c3">투자<br>유형</th><th class="sc c4">투자항목</th>
-          <th class="sc c5">투자목적</th>
-          <th class="gs">발주목표</th><th class="gs">발주실적</th>
-          <th class="gs">셋업목표</th><th class="gs">셋업실적</th>
-          <th class="gs">양산목표</th><th class="gs">양산실적</th>
-          <th class="gs">연기사유</th>
-          <th class="gv">Base</th><th class="gv">발주가<br>목표</th>
-          <th class="gv">발주가<br>실적</th><th class="gv">절감<br>목표</th>
-          <th class="gr">절감<br>실적</th>
-          <th class="gr">①신기술<br>신공법</th><th class="gr">②염가형<br>부품</th>
-          <th class="gr">③중국/<br>Local</th><th class="gr">④중국/한국<br>Collabo</th>
-          <th class="gr">⑤컨테이너<br>최소화</th><th class="gr">⑥출장<br>최소화</th>
-          <th class="gr">⑦유휴<br>설비</th><th class="gr">⑧사양<br>최적화</th>
-          <th class="gr">⑨기타</th><th class="gr">활동내용</th>
-          <th class="ge">절감률<br>목표(%)</th><th class="ge">절감률<br>실적(%)</th>
+          <th class="sc c0"><span class="i18n" data-ko="수정/삭제" data-en="Edit/Del">수정/<br>삭제</span></th>
+          <th class="sc c1"><span class="i18n" data-ko="제품" data-en="Product">제품</span></th>
+          <th class="sc c2"><span class="i18n" data-ko="법인" data-en="Corp.">법인</span></th>
+          <th class="sc c3"><span class="i18n" data-ko="투자유형" data-en="Type">투자<br>유형</span></th>
+          <th class="sc c4"><span class="i18n" data-ko="투자항목" data-en="Item">투자항목</span></th>
+          <th class="sc c5"><span class="i18n" data-ko="투자목적" data-en="Purpose">투자목적</span></th>
+          <th class="gs"><span class="i18n" data-ko="발주목표" data-en="Order Tgt">발주목표</span></th>
+          <th class="gs"><span class="i18n" data-ko="발주실적" data-en="Order Act">발주실적</span></th>
+          <th class="gs"><span class="i18n" data-ko="셋업목표" data-en="Setup Tgt">셋업목표</span></th>
+          <th class="gs"><span class="i18n" data-ko="셋업실적" data-en="Setup Act">셋업실적</span></th>
+          <th class="gs"><span class="i18n" data-ko="양산목표" data-en="Mass Tgt">양산목표</span></th>
+          <th class="gs"><span class="i18n" data-ko="양산실적" data-en="Mass Act">양산실적</span></th>
+          <th class="gs"><span class="i18n" data-ko="연기사유" data-en="Delay">연기사유</span></th>
+          <th class="gv">Base</th>
+          <th class="gv"><span class="i18n" data-ko="발주가 목표" data-en="Order P. Tgt">발주가<br>목표</span></th>
+          <th class="gv"><span class="i18n" data-ko="발주가 실적" data-en="Order P. Act">발주가<br>실적</span></th>
+          <th class="gv"><span class="i18n" data-ko="절감 목표" data-en="Save Tgt">절감<br>목표</span></th>
+          <th class="gr"><span class="i18n" data-ko="절감 실적" data-en="Save Act">절감<br>실적</span></th>
+          <th class="gr">①</th><th class="gr">②</th><th class="gr">③</th><th class="gr">④</th>
+          <th class="gr">⑤</th><th class="gr">⑥</th><th class="gr">⑦</th><th class="gr">⑧</th>
+          <th class="gr">⑨</th>
+          <th class="gr"><span class="i18n" data-ko="활동내용" data-en="Activity">활동내용</span></th>
+          <th class="ge"><span class="i18n" data-ko="절감률 목표(%)" data-en="Rate Tgt(%)">절감률<br>목표(%)</span></th>
+          <th class="ge"><span class="i18n" data-ko="절감률 실적(%)" data-en="Rate Act(%)">절감률<br>실적(%)</span></th>
           <th class="ge">Signal</th>
         </tr>
       </thead>
@@ -1245,6 +1332,8 @@ function updateFilterCorps(){
   corps.forEach(c=>{const o=document.createElement('option');o.value=o.textContent=c;s.appendChild(o);});
   if(corps.includes(cur)) s.value=cur;
 }
+
+/* [수정7] Signal 신호등 로직 수정 */
 function renderTable(data){
   const tb=document.getElementById("tableBody"),tf=document.getElementById("tableFoot");
   let out="",tot={base:0,opt:0,opa:0,sgt:0,sga:0,r:[0,0,0,0,0,0,0,0,0]};
@@ -1262,13 +1351,31 @@ function renderTable(data){
     h+="<td>"+f(r[13])+"</td><td>"+f(r[14])+"</td><td>"+f(r[15])+"</td><td>"+f(r[16])+"</td><td>"+f(r[17])+"</td>";
     for(let i=18;i<=26;i++){tot.r[i-18]+=(parseFloat(r[i])||0);h+="<td>"+f(r[i])+"</td>";}
     h+="<td class='act-cell'>"+f(r[28])+"</td>";
+
+    /* [수정7] 절감률 목표/실적 및 Signal 신호등 */
     const rTgt=(prod==="ES")?50:30;
-    let rAct="-",rActNum=0;
-    if(base>0&&sga>0){rActNum=(sga/base)*100;rAct=rActNum.toFixed(1);}
-    else if(base>0){rAct="0";}
-    let sig="s-x";
-    if(base>0&&sga>0) sig=(rActNum>=rTgt)?"s-g":"s-y";
-    h+="<td>"+rTgt+"%</td><td>"+(rAct!=="-"?rAct+"%":"-")+"</td><td><span class='sig "+sig+"'></span></td></tr>";
+    let rAct="-",rActNum=null;
+    if(base>0 && sga>0){
+      rActNum=(sga/base)*100;
+      rAct=rActNum.toFixed(1);
+    } else if(base>0 && sga===0){
+      rActNum=0;
+      rAct="0";
+    }
+    // else: base가 0이거나 미입력 → rActNum = null (미입력)
+
+    let sig="s-x"; // 기본: 회색 (미입력)
+    if(rActNum !== null){
+      // 실적이 있음 (0 포함)
+      if(rActNum >= rTgt){
+        sig = "s-g"; // 초록: 목표 이상
+      } else {
+        sig = "s-y"; // 주황: 목표 미달
+      }
+    }
+
+    h+="<td>"+rTgt+"%</td><td>"+(rAct!=="-"?rAct+"%":"-")+"</td>";
+    h+="<td style='text-align:center'><span class='sig "+sig+"' style='display:inline-block'></span></td></tr>";
     out+=h;
   });
   tb.innerHTML=out;
@@ -1298,11 +1405,30 @@ function downloadExcel(){
   XLSX.utils.book_append_sheet(wb,ws,"투자실적");
   XLSX.writeFile(wb,"설비투자비_활동실적_"+new Date().toISOString().slice(0,10)+".xlsx");
 }
+
+/* i18n */
+function setLang(lang){
+  localStorage.setItem('app_lang', lang);
+  document.getElementById('langKo2').classList.toggle('active', lang==='ko');
+  document.getElementById('langEn2').classList.toggle('active', lang==='en');
+  applyLang();
+}
+function applyLang(){
+  const lang = localStorage.getItem('app_lang') || 'ko';
+  document.getElementById('langKo2').classList.toggle('active', lang==='ko');
+  document.getElementById('langEn2').classList.toggle('active', lang==='en');
+  document.querySelectorAll('.i18n').forEach(el=>{
+    const txt = el.getAttribute('data-'+lang);
+    if(txt) el.innerHTML = txt.replace(/\n/g,'<br>');
+  });
+}
+
 window.onload=function(){
   updateFilterCorps();
   const ps=document.getElementById('fpu');
   ALL_PURPOSES.forEach(p=>{const o=document.createElement('option');o.value=o.textContent=p;ps.appendChild(o);});
   renderTable(DATA);
+  applyLang();
 }
 </script>
 </body>

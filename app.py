@@ -1,7 +1,6 @@
 from flask import Flask, request, redirect, render_template_string, jsonify
 import psycopg2
 import psycopg2.extras
-from psycopg2 import pool
 from datetime import datetime
 import os
 import json
@@ -12,29 +11,18 @@ app = Flask(__name__)
 # Render 환경변수에 DATABASE_URL을 설정하세요
 # Supabase 대시보드 → Settings → Database → Connection string (URI) 복사
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
-# ===== Connection Pool 생성 =====
-db_pool = pool.SimpleConnectionPool(
-    1,   # 최소 연결 수
-    10,  # 최대 연결 수
-    DATABASE_URL,
-    cursor_factory=psycopg2.extras.RealDictCursor
-)
 
 def get_conn():
-    """Connection Pool에서 연결 가져오기 (DictCursor)"""
-    conn = db_pool.getconn()
+    """PostgreSQL 연결 생성"""
+    conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
     conn.autocommit = False
     return conn
 
 def get_conn_tuple():
-    """튜플용 연결"""
-    conn = db_pool.getconn()
+    """튜플 형태 결과를 위한 연결 (기존 코드 호환)"""
+    conn = psycopg2.connect(DATABASE_URL)
     conn.autocommit = False
     return conn
-
-def release_conn(conn):
-    """사용 후 연결 반환"""
-    db_pool.putconn(conn)
 
 def init_db():
     conn = get_conn_tuple()
@@ -59,7 +47,7 @@ def init_db():
         PRIMARY KEY (id, year_month),
         FOREIGN KEY (id) REFERENCES investment(id) ON DELETE CASCADE
     )""")
-    conn.commit(); release_conn(conn)
+    conn.commit(); conn.close()
 
 init_db()
 
@@ -141,7 +129,7 @@ def save():
                 VALUES (%s,%s,%s,%s)
                 ON CONFLICT (id, year_month) DO UPDATE SET monthly_target=EXCLUDED.monthly_target, monthly_actual=EXCLUDED.monthly_actual""",
                 (target_id, ym, t, a))
-        conn.commit(); release_conn(conn); return redirect("/list")
+        conn.commit(); conn.close(); return redirect("/list")
     except Exception as e:
         import traceback; traceback.print_exc(); return f"저장 오류: {e}", 500
 
@@ -181,7 +169,7 @@ def list_page():
 def delete_row(row_id):
     conn = get_conn_tuple(); c = conn.cursor()
     c.execute("DELETE FROM investment WHERE id=%s", (row_id,)); c.execute("DELETE FROM investment_monthly WHERE id=%s", (row_id,))
-    conn.commit(); release_conn(conn); return jsonify({"success": True})
+    conn.commit(); conn.close(); return jsonify({"success": True})
 
 INPUT_TPL = r"""<!DOCTYPE html>
 <html lang="ko"><head><meta charset="utf-8"><title>설비투자비 한계돌파 실적 관리 시스템</title>
@@ -347,25 +335,22 @@ const PU={'신규라인':'New Line','자동화':'Automation','라인 개조':'Li
 const pu=document.getElementById('purpose_select');if(pu){[...pu.options].forEach(o=>{if(o.value)o.textContent=l==='en'?(PU[o.value]||o.value):o.value;});}
 document.documentElement.lang=l==='en'?'en':'ko';
 document.querySelectorAll('.month-i').forEach(m=>{
-  if(!m.parentElement.classList.contains('month-wrap')){
-    const w=document.createElement('div');
-    w.className='month-wrap';
-    w.style.cssText='position:relative;width:100%';
-    m.parentElement.insertBefore(w,m);
-    w.appendChild(m);
+  const wrap=m.closest('.form-group')||m.parentElement;
+  if(!wrap.querySelector('.month-overlay')){
     const ov=document.createElement('span');
     ov.className='month-overlay';
-    ov.style.cssText='position:absolute;left:16px;top:0;width:calc(100% - 32px);height:100%;display:none;pointer-events:none;font-size:15px;color:#999;z-index:1;display:flex;align-items:center';
-    w.appendChild(ov);
-    m.addEventListener('change',()=>{const cl=localStorage.getItem('app_lang')||'ko';ov.style.display=m.value?'none':(cl==='en'?'flex':'none');});
+    ov.style.cssText='position:absolute;left:16px;top:0;bottom:0;display:none;pointer-events:none;font-size:15px;color:#999;line-height:1;z-index:1';
+    ov.style.display='flex';ov.style.alignItems='center';ov.style.display='none';
+    const p=m.parentElement;p.style.position='relative';p.appendChild(ov);
+    m.addEventListener('change',()=>{ov.style.display=m.value?'none':(l==='en'?'block':'none');});
   }
   const ov=m.parentElement.querySelector('.month-overlay');
   if(ov){
     ov.textContent=l==='en'?'YYYY-MM':'';
     if(l==='en'&&!m.value){
-      m.style.color='transparent';ov.style.display='flex';
+      m.style.color='transparent';ov.style.display='block';
       m.onfocus=function(){this.style.color='';ov.style.display='none';};
-      m.onblur=function(){if(!this.value){this.style.color='transparent';ov.style.display='flex';}};
+      m.onblur=function(){if(!this.value){this.style.color='transparent';ov.style.display='block';}};
     } else {
       m.style.color='';ov.style.display='none';
       m.onfocus=null;m.onblur=null;
@@ -599,8 +584,13 @@ tr.gh th.sc{z-index:21 !important}
 </div>
 <div class="table-container"><div class="table-wrap">
   <table id="mainTable"><thead>
-<tr class="gh">
-  <th class="g-c" colspan="6" style="position:sticky;left:0;z-index:21;text-align:center"><span class="i18n" data-ko="투자 분류" data-en="Classification">투자 분류</span></th>
+    <tr class="gh">
+      <th class="sc c0 g-c" style="border-right:0"></th>
+      <th class="sc c1 g-c" style="border-left:0;border-right:0"></th>
+      <th class="sc c2 g-c" style="border-left:0;border-right:0;position:relative;overflow:visible"><span class="i18n" data-ko="투자 분류" data-en="Classification" style="position:absolute;white-space:nowrap;left:50%;top:50%;transform:translate(-50%,-50%);z-index:1">투자 분류</span></th>
+      <th class="sc c3 g-c" style="border-left:0;border-right:0"></th>
+      <th class="sc c4 g-c" style="border-left:0;border-right:0"></th>
+      <th class="sc c5 g-c" style="border-left:0"></th>
       <th class="g-s" colspan="7">📅 <span class="i18n" data-ko="일정" data-en="Schedule">일정</span></th>
       <th class="g-v" colspan="4">💰 <span class="i18n" data-ko="투자절감" data-en="Savings">투자절감</span></th>
       <th class="g-r" colspan="11">📊 <span class="i18n" data-ko="절감활동" data-en="Activities">절감활동</span></th>

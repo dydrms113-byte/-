@@ -335,22 +335,25 @@ const PU={'신규라인':'New Line','자동화':'Automation','라인 개조':'Li
 const pu=document.getElementById('purpose_select');if(pu){[...pu.options].forEach(o=>{if(o.value)o.textContent=l==='en'?(PU[o.value]||o.value):o.value;});}
 document.documentElement.lang=l==='en'?'en':'ko';
 document.querySelectorAll('.month-i').forEach(m=>{
-  const wrap=m.closest('.form-group')||m.parentElement;
-  if(!wrap.querySelector('.month-overlay')){
+  if(!m.parentElement.classList.contains('month-wrap')){
+    const w=document.createElement('div');
+    w.className='month-wrap';
+    w.style.cssText='position:relative;width:100%';
+    m.parentElement.insertBefore(w,m);
+    w.appendChild(m);
     const ov=document.createElement('span');
     ov.className='month-overlay';
-    ov.style.cssText='position:absolute;left:16px;top:0;bottom:0;display:none;pointer-events:none;font-size:15px;color:#999;line-height:1;z-index:1';
-    ov.style.display='flex';ov.style.alignItems='center';ov.style.display='none';
-    const p=m.parentElement;p.style.position='relative';p.appendChild(ov);
-    m.addEventListener('change',()=>{ov.style.display=m.value?'none':(l==='en'?'block':'none');});
+    ov.style.cssText='position:absolute;left:16px;top:0;width:calc(100% - 32px);height:100%;display:none;pointer-events:none;font-size:15px;color:#999;z-index:1;display:flex;align-items:center';
+    w.appendChild(ov);
+    m.addEventListener('change',()=>{const cl=localStorage.getItem('app_lang')||'ko';ov.style.display=m.value?'none':(cl==='en'?'flex':'none');});
   }
   const ov=m.parentElement.querySelector('.month-overlay');
   if(ov){
     ov.textContent=l==='en'?'YYYY-MM':'';
     if(l==='en'&&!m.value){
-      m.style.color='transparent';ov.style.display='block';
+      m.style.color='transparent';ov.style.display='flex';
       m.onfocus=function(){this.style.color='';ov.style.display='none';};
-      m.onblur=function(){if(!this.value){this.style.color='transparent';ov.style.display='block';}};
+      m.onblur=function(){if(!this.value){this.style.color='transparent';ov.style.display='flex';}};
     } else {
       m.style.color='';ov.style.display='none';
       m.onfocus=null;m.onblur=null;
@@ -584,13 +587,8 @@ tr.gh th.sc{z-index:21 !important}
 </div>
 <div class="table-container"><div class="table-wrap">
   <table id="mainTable"><thead>
-    <tr class="gh">
-      <th class="sc c0 g-c" style="border-right:0"></th>
-      <th class="sc c1 g-c" style="border-left:0;border-right:0"></th>
-      <th class="sc c2 g-c" style="border-left:0;border-right:0;position:relative;overflow:visible"><span class="i18n" data-ko="투자 분류" data-en="Classification" style="position:absolute;white-space:nowrap;left:50%;top:50%;transform:translate(-50%,-50%);z-index:1">투자 분류</span></th>
-      <th class="sc c3 g-c" style="border-left:0;border-right:0"></th>
-      <th class="sc c4 g-c" style="border-left:0;border-right:0"></th>
-      <th class="sc c5 g-c" style="border-left:0"></th>
+<tr class="gh">
+  <th class="g-c" colspan="6" style="position:sticky;left:0;z-index:21;text-align:center"><span class="i18n" data-ko="투자 분류" data-en="Classification">투자 분류</span></th>
       <th class="g-s" colspan="7">📅 <span class="i18n" data-ko="일정" data-en="Schedule">일정</span></th>
       <th class="g-v" colspan="4">💰 <span class="i18n" data-ko="투자절감" data-en="Savings">투자절감</span></th>
       <th class="g-r" colspan="11">📊 <span class="i18n" data-ko="절감활동" data-en="Activities">절감활동</span></th>

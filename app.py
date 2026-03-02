@@ -1,6 +1,7 @@
 from flask import Flask, request, redirect, render_template_string, jsonify
 import psycopg2
 import psycopg2.extras
+from psycopg2 import pool
 from datetime import datetime
 import os
 import json
@@ -11,18 +12,29 @@ app = Flask(__name__)
 # Render 환경변수에 DATABASE_URL을 설정하세요
 # Supabase 대시보드 → Settings → Database → Connection string (URI) 복사
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
+# ===== Connection Pool 생성 =====
+db_pool = pool.SimpleConnectionPool(
+    1,   # 최소 연결 수
+    10,  # 최대 연결 수
+    DATABASE_URL,
+    cursor_factory=psycopg2.extras.RealDictCursor
+)
 
 def get_conn():
-    """PostgreSQL 연결 생성"""
-    conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+    """Connection Pool에서 연결 가져오기 (DictCursor)"""
+    conn = db_pool.getconn()
     conn.autocommit = False
     return conn
 
 def get_conn_tuple():
-    """튜플 형태 결과를 위한 연결 (기존 코드 호환)"""
-    conn = psycopg2.connect(DATABASE_URL)
+    """튜플용 연결"""
+    conn = db_pool.getconn()
     conn.autocommit = False
     return conn
+
+def release_conn(conn):
+    """사용 후 연결 반환"""
+    db_pool.putconn(conn)
 
 def init_db():
     conn = get_conn_tuple()
@@ -47,7 +59,7 @@ def init_db():
         PRIMARY KEY (id, year_month),
         FOREIGN KEY (id) REFERENCES investment(id) ON DELETE CASCADE
     )""")
-    conn.commit(); conn.close()
+    conn.commit(); release_conn(conn)
 
 init_db()
 
@@ -129,7 +141,7 @@ def save():
                 VALUES (%s,%s,%s,%s)
                 ON CONFLICT (id, year_month) DO UPDATE SET monthly_target=EXCLUDED.monthly_target, monthly_actual=EXCLUDED.monthly_actual""",
                 (target_id, ym, t, a))
-        conn.commit(); conn.close(); return redirect("/list")
+        conn.commit(); release_conn(conn); return redirect("/list")
     except Exception as e:
         import traceback; traceback.print_exc(); return f"저장 오류: {e}", 500
 
@@ -169,7 +181,7 @@ def list_page():
 def delete_row(row_id):
     conn = get_conn_tuple(); c = conn.cursor()
     c.execute("DELETE FROM investment WHERE id=%s", (row_id,)); c.execute("DELETE FROM investment_monthly WHERE id=%s", (row_id,))
-    conn.commit(); conn.close(); return jsonify({"success": True})
+    conn.commit(); release_conn(conn); return jsonify({"success": True})
 
 INPUT_TPL = r"""<!DOCTYPE html>
 <html lang="ko"><head><meta charset="utf-8"><title>설비투자비 한계돌파 실적 관리 시스템</title>

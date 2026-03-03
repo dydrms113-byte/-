@@ -1,55 +1,82 @@
-from flask import Flask, request, redirect, render_template_string, jsonify
+from flask import Flask, request, redirect, render_template_string, jsonify, session
 import psycopg2
 import psycopg2.extras
+import psycopg2.pool
 from datetime import datetime
 import os
 import json
 
 app = Flask(__name__)
+app.secret_key = "super_secret_key_123"   # 추가
 
 # ===== Supabase PostgreSQL 연결 설정 =====
 # Render 환경변수에 DATABASE_URL을 설정하세요
 # Supabase 대시보드 → Settings → Database → Connection string (URI) 복사
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
-def get_conn():
-    """PostgreSQL 연결 생성"""
-    conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+# ===== Connection Pool 설정 (속도 최적화) =====
+# 기존: 매 요청마다 psycopg2.connect() → conn.close() (200~500ms 소요)
+# 변경: 풀에서 가져와 재사용 → put_conn()으로 반환 (거의 0ms)
+_pool = psycopg2.pool.ThreadedConnectionPool(minconn=2, maxconn=10, dsn=DATABASE_URL)
+
+def get_conn_tuple():
+    """튜플 형태 결과를 위한 연결 (풀에서 가져오기)"""
+    conn = _pool.getconn()
     conn.autocommit = False
     return conn
 
-def get_conn_tuple():
-    """튜플 형태 결과를 위한 연결 (기존 코드 호환)"""
-    conn = psycopg2.connect(DATABASE_URL)
-    conn.autocommit = False
-    return conn
+def put_conn(conn):
+    """연결을 풀에 반환 (기존 conn.close() 대체)"""
+    try:
+        conn.rollback()
+    except Exception:
+        pass
+    _pool.putconn(conn)
+
+def get_conn():
+    """PostgreSQL 연결 생성 (풀에서 가져오기)"""
+    return get_conn_tuple()
 
 def init_db():
     conn = get_conn_tuple()
     c = conn.cursor()
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS investment (
-        id SERIAL PRIMARY KEY,
-        invest_type TEXT, product TEXT, corporation TEXT, purpose TEXT,
-        invest_item TEXT, order_target TEXT, order_actual TEXT,
-        setup_target TEXT, setup_actual TEXT, mass_target TEXT, mass_actual TEXT,
-        delay_reason TEXT, base_amount REAL, order_price_target REAL,
-        order_price_actual REAL, saving_target REAL, saving_actual REAL,
-        reduce_1 REAL, reduce_2 REAL, reduce_3 REAL, reduce_4 REAL,
-        reduce_5 REAL, reduce_6 REAL, reduce_7 REAL, reduce_8 REAL,
-        reduce_9 REAL, saving_total REAL, activity TEXT,
-        created_at TEXT, updated_at TEXT
-    )""")
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS investment_monthly (
-        id INTEGER, year_month TEXT,
-        monthly_target REAL DEFAULT 0, monthly_actual REAL DEFAULT 0,
-        PRIMARY KEY (id, year_month),
-        FOREIGN KEY (id) REFERENCES investment(id) ON DELETE CASCADE
-    )""")
-    conn.commit(); conn.close()
+    try:
+        c.execute("""
+        CREATE TABLE IF NOT EXISTS investment (
+            id SERIAL PRIMARY KEY,
+            invest_type TEXT, product TEXT, corporation TEXT, purpose TEXT,
+            invest_item TEXT, order_target TEXT, order_actual TEXT,
+            setup_target TEXT, setup_actual TEXT, mass_target TEXT, mass_actual TEXT,
+            delay_reason TEXT, base_amount REAL, order_price_target REAL,
+            order_price_actual REAL, saving_target REAL, saving_actual REAL,
+            reduce_1 REAL, reduce_2 REAL, reduce_3 REAL, reduce_4 REAL,
+            reduce_5 REAL, reduce_6 REAL, reduce_7 REAL, reduce_8 REAL,
+            reduce_9 REAL, saving_total REAL, activity TEXT,
+            created_at TEXT, updated_at TEXT
+        )""")
+        c.execute("""
+        CREATE TABLE IF NOT EXISTS investment_monthly (
+            id INTEGER, year_month TEXT,
+            monthly_target REAL DEFAULT 0, monthly_actual REAL DEFAULT 0,
+            PRIMARY KEY (id, year_month),
+            FOREIGN KEY (id) REFERENCES investment(id) ON DELETE CASCADE
+        )""")
+        conn.commit()
+    finally:
+        put_conn(conn)
 
 init_db()
+
+# ===== 로그인 데코레이터 =====
+from functools import wraps
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if "user" not in session:
+            return redirect("/login")
+        return f(*args, **kwargs)
+    return decorated_function
 
 PRODUCTS = ["키친", "빌트인쿠킹", "리빙", "부품", "ES"]
 CORPORATIONS = {
@@ -68,8 +95,12 @@ def nz(v, default=0.0):
     except: return default
 
 def get_processed_rows():
-    conn = get_conn_tuple(); c = conn.cursor()
-    c.execute("SELECT * FROM investment ORDER BY id DESC"); rows = c.fetchall(); conn.close()
+    conn = get_conn_tuple()
+    try:
+        c = conn.cursor()
+        c.execute("SELECT * FROM investment ORDER BY id DESC"); rows = c.fetchall()
+    finally:
+        put_conn(conn)
     processed = []
     for r in rows:
         r = list(r)
@@ -82,20 +113,49 @@ def get_processed_rows():
         r.append(timestamp); processed.append(r)
     return processed
 
+# ===== 로그인 =====
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form.get("username")
+        password = request.form.get("password")
+
+        if username == "admin" and password == "1234":
+            session["user"] = username
+            return redirect("/dashboard")
+        else:
+            return render_template_string(LOGIN_TPL, error="아이디 또는 비밀번호 오류")
+
+    return render_template_string(LOGIN_TPL)
+
+
+# ===== 로그아웃 =====
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/login")
+
 @app.route("/")
 @app.route("/edit/<int:row_id>")
+@login_required
 def index(row_id=None):
     edit_data = None
     if row_id:
-        conn = get_conn_tuple(); c = conn.cursor()
-        c.execute("SELECT * FROM investment WHERE id = %s", (row_id,)); edit_data = c.fetchone(); conn.close()
+        conn = get_conn_tuple()
+        try:
+            c = conn.cursor()
+            c.execute("SELECT * FROM investment WHERE id = %s", (row_id,)); edit_data = c.fetchone()
+        finally:
+            put_conn(conn)
         if not edit_data: return "데이터를 찾을 수 없습니다.", 404
     return render_template_string(INPUT_TPL, products=PRODUCTS, corporations_json=json.dumps(CORPORATIONS, ensure_ascii=False), all_purposes=ALL_PURPOSES, edit_data=edit_data, row_id=row_id)
 
 @app.route("/save", methods=["POST"])
+@login_required
 def save():
+    conn = get_conn_tuple()
     try:
-        f = request.form; conn = get_conn_tuple(); c = conn.cursor()
+        f = request.form; c = conn.cursor()
         row_id = f.get("row_id"); now = datetime.now().strftime("%Y-%m-%d %H:%M")
         values = (f.get("invest_type") or "", f.get("product") or "", f.get("corporation") or "", f.get("purpose") or "",
             f.get("invest_item") or "", f.get("order_target") or "", f.get("order_actual") or "",
@@ -129,11 +189,20 @@ def save():
                 VALUES (%s,%s,%s,%s)
                 ON CONFLICT (id, year_month) DO UPDATE SET monthly_target=EXCLUDED.monthly_target, monthly_actual=EXCLUDED.monthly_actual""",
                 (target_id, ym, t, a))
-        conn.commit(); conn.close(); return redirect("/list")
+        conn.commit()
     except Exception as e:
-        import traceback; traceback.print_exc(); return f"저장 오류: {e}", 500
+        import traceback; traceback.print_exc()
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        put_conn(conn)
+        return f"저장 오류: {e}", 500
+    put_conn(conn)
+    return redirect("/list")
 
 @app.route("/dashboard")
+@login_required
 def dashboard():
     processed = get_processed_rows()
     months_2026 = [f"2026-{m:02d}" for m in range(1,13)]
@@ -151,9 +220,14 @@ def dashboard():
         all_purposes_json=json.dumps(ALL_PURPOSES, ensure_ascii=False))
 
 @app.route("/list")
+@login_required
 def list_page():
-    conn = get_conn_tuple(); c = conn.cursor()
-    c.execute("SELECT * FROM investment ORDER BY id DESC"); rows = c.fetchall(); conn.close()
+    conn = get_conn_tuple()
+    try:
+        c = conn.cursor()
+        c.execute("SELECT * FROM investment ORDER BY id DESC"); rows = c.fetchall()
+    finally:
+        put_conn(conn)
     processed = []
     for r in rows:
         r = list(r); base = r[13] if r[13] else 0; sav_act = r[17] if r[17] else 0; product = r[2] if r[2] else ""
@@ -166,10 +240,16 @@ def list_page():
         all_purposes_json=json.dumps(ALL_PURPOSES, ensure_ascii=False))
 
 @app.route("/delete/<int:row_id>", methods=["POST"])
+@login_required
 def delete_row(row_id):
-    conn = get_conn_tuple(); c = conn.cursor()
-    c.execute("DELETE FROM investment WHERE id=%s", (row_id,)); c.execute("DELETE FROM investment_monthly WHERE id=%s", (row_id,))
-    conn.commit(); conn.close(); return jsonify({"success": True})
+    conn = get_conn_tuple()
+    try:
+        c = conn.cursor()
+        c.execute("DELETE FROM investment WHERE id=%s", (row_id,)); c.execute("DELETE FROM investment_monthly WHERE id=%s", (row_id,))
+        conn.commit()
+    finally:
+        put_conn(conn)
+    return jsonify({"success": True})
 
 INPUT_TPL = r"""<!DOCTYPE html>
 <html lang="ko"><head><meta charset="utf-8"><title>설비투자비 한계돌파 실적 관리 시스템</title>
@@ -453,10 +533,10 @@ body{font-family:'Noto Sans KR',sans-serif;background:#eef0f4;display:flex;min-h
   </div>
   <div class="chart-grid chart-row-4" style="margin-bottom:20px">
     <div class="chart-card"><div class="chart-header"><div class="chart-title">📊 <span class="i18n" data-ko="투자유형별 절감 실적" data-en="Savings by Type">투자유형별 절감 실적</span></div></div>
-      <div style="display:grid;grid-template-columns:240px 1fr;gap:0;height:320px">
-        <div class="invest-type-total-wrap"><div class="invest-type-total-label">Total</div><div style="position:relative;height:calc(100% - 30px)"><canvas id="cInvestTypeTotal"></canvas></div></div>
-        <div style="position:relative;padding-left:8px;height:100%"><div style="position:relative;height:100%"><canvas id="cInvestTypeProduct"></canvas></div></div>
-      </div></div>
+<div style="display:grid;grid-template-columns:240px 1fr;gap:0;height:320px;overflow:hidden">
+  <div class="invest-type-total-wrap"><div class="invest-type-total-label">Total</div><div style="position:relative;height:280px"><canvas id="cInvestTypeTotal"></canvas></div></div>
+  <div style="position:relative;padding-left:8px;height:320px"><div style="position:relative;height:300px"><canvas id="cInvestTypeProduct"></canvas></div></div>
+</div>
   </div>
   <div class="chart-grid chart-row-3" style="margin-bottom:20px">
     <div class="chart-card"><div class="chart-header"><div class="chart-title">🔧 <span class="i18n" data-ko="절감 활동별 실적" data-en="By Activity">절감 활동별 실적</span></div></div><div class="chart-wrap activity"><canvas id="cActivity"></canvas></div></div>
@@ -647,6 +727,165 @@ function tl(ko,en){return(localStorage.getItem('app_lang')==='en')?en:ko;}
 function initListFilters(){const l=localStorage.getItem('app_lang')||'ko';const fp=document.getElementById('fp'),cfp=fp.value;fp.innerHTML='<option value="">'+tl('전체','All')+'</option>';['키친','빌트인쿠킹','리빙','부품','ES'].forEach(p=>{const o=document.createElement('option');o.value=p;o.textContent=l==='en'?(LP[p]||p):p;fp.appendChild(o);});if(cfp)fp.value=cfp;const ft=document.getElementById('ft'),cft=ft.value;ft.innerHTML='<option value="">'+tl('전체','All')+'</option>';const o1=document.createElement('option');o1.value='확장';o1.textContent=tl('확장','Expansion');ft.appendChild(o1);const o2=document.createElement('option');o2.value='경상';o2.textContent=tl('경상','Recurring');ft.appendChild(o2);if(cft)ft.value=cft;updateFilterCorps();const _PP2={'신규라인':'New Line','자동화':'Automation','라인 개조':'Line Remodel','Overhaul':'Overhaul','신모델 대응':'New Model','T/Time 향상':'T/Time Improve','고장 수리':'Repair','안전':'Safety','설비 이설':'Equip. Relocation','노후 교체':'Aging Replace','설비 개선':'Equip. Improve','기타':'Others'};const fpu=document.getElementById('fpu'),cfpu=fpu.value;fpu.innerHTML='<option value="">'+tl('전체','All')+'</option>';ALL_PURPOSES.forEach(p=>{const o=document.createElement('option');o.value=p;o.textContent=l==='en'?(_PP2[p]||p):p;fpu.appendChild(o);});if(cfpu)fpu.value=cfpu;}
 window.onload=function(){applyLang();initListFilters();renderTable(DATA);}
 </script></body></html>"""
+
+# ===== LOGIN TEMPLATE =====
+LOGIN_TPL = r"""
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>LG전자 창원생산기술실 시스템</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+
+<style>
+*{
+  margin:0;
+  padding:0;
+  box-sizing:border-box;
+  font-family:'Noto Sans KR', sans-serif;
+}
+
+body{
+  height:100vh;
+  background:linear-gradient(135deg,#f3f4f6,#e5e7eb);
+  display:flex;
+  justify-content:center;
+  align-items:center;
+}
+
+.card{
+  width:420px;
+  padding:60px 45px;
+  border-radius:28px;
+  background:rgba(255,255,255,0.85);
+  backdrop-filter: blur(15px);
+  box-shadow:0 30px 80px rgba(0,0,0,0.15);
+  text-align:center;
+  transition:0.4s;
+}
+
+.card:hover{
+  transform:translateY(-4px);
+  box-shadow:0 40px 90px rgba(0,0,0,0.2);
+}
+
+.logo img{
+  width:140px;
+  margin-bottom:30px;
+}
+
+/* 🔴 Welcome back 느낌으로 좌측 정렬 */
+.title{
+  font-size:16px;       /* 조금 작게 */
+  font-weight:500;      /* 살짝 부드럽게 */
+  margin-bottom:25px;
+  color:#666;           /* 회색 */
+  text-align:left;
+}
+
+.input-group{
+  margin-bottom:28px;
+  text-align:left;
+}
+
+.input-group label{
+  font-size:13px;
+  font-weight:500;
+  color:#555;
+}
+
+.input-group input{
+  width:100%;
+  margin-top:8px;
+  padding:14px 14px;
+  border-radius:10px;
+  border:1.5px solid #ddd;
+  font-size:14px;
+  transition:0.3s;
+  background:#fafafa;
+}
+
+.input-group input:focus{
+  border-color:#a50034;
+  background:white;
+  box-shadow:0 0 0 4px rgba(165,0,52,0.1);
+  outline:none;
+}
+
+.btn{
+  width:100%;
+  padding:15px;
+  margin-top:10px;
+  border:none;
+  border-radius:12px;
+  background:linear-gradient(90deg,#a50034,#c30045);
+  color:white;
+  font-size:15px;
+  font-weight:600;
+  cursor:pointer;
+  transition:0.3s;
+}
+
+.btn:hover{
+  transform:translateY(-2px);
+  box-shadow:0 8px 20px rgba(165,0,52,0.35);
+}
+
+.footer{
+  margin-top:35px;
+  font-size:12px;
+  color:#888;
+}
+
+.error{
+  color:#d00000;
+  font-size:13px;
+  margin-bottom:20px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="card">
+
+  <div class="logo">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/20/LG_symbol.svg/512px-LG_symbol.svg.png" alt="LG 로고">
+  </div>
+
+  <form method="post">
+
+    <div class="title">창원생산기술실 실적 관리 시스템</div>
+
+    {% if error %}
+    <div class="error">{{ error }}</div>
+    {% endif %}
+
+    <div class="input-group">
+      <label>아이디</label>
+      <input type="text" name="username" required>
+    </div>
+
+    <div class="input-group">
+      <label>비밀번호</label>
+      <input type="password" name="password" required>
+    </div>
+
+    <button type="submit" class="btn">로그인</button>
+
+  </form>
+
+  <div class="footer">
+    © 2026 LG Electronics Changwon Production Technology
+  </div>
+
+</div>
+
+</body>
+</html>
+"""
 
 if __name__ == "__main__":
     print("🚀 서버 시작: http://127.0.0.1:5000")

@@ -508,6 +508,9 @@ body{font-family:'Noto Sans KR',sans-serif;background:#eef0f4;display:flex;min-h
     <a href="/dashboard" class="menu-item active"><span class="menu-icon">🏠</span><span class="i18n" data-ko="대시보드" data-en="Dashboard">대시보드</span></a>
     <a href="/list" class="menu-item"><span class="menu-icon">📋</span><span class="i18n" data-ko="투자실적 조회" data-en="Records">투자실적 조회</span></a>
     <a href="/" class="menu-item"><span class="menu-icon">✏️</span><span class="i18n" data-ko="Data 입력" data-en="Data Entry">Data 입력</span></a>
+    </div>
+<div style="padding:10px 18px 18px">
+    <a href="#" onclick="event.preventDefault();confirmLogout()" style="display:flex;align-items:center;gap:7px;background:rgba(255,255,255,0.06);color:#8a94a6;padding:10px 16px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:500;justify-content:center;transition:all 0.2s;border:1px solid rgba(255,255,255,0.08)"><span style="font-size:15px">🔓</span> <span class="i18n" data-ko="로그아웃" data-en="Logout">로그아웃</span></a>
   </div>
 </div>
 <div class="main">
@@ -584,6 +587,8 @@ function chart_Corp(){const cT={},cA={};ALL_CORPS_ORDERED.forEach(c=>{cT[c]=0;cA
 function chart_Monthly(){const labels=getLang()==='en'?['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']:MONTHLY_DATA.labels;const tgt=MONTHLY_DATA.target,act=MONTHLY_DATA.actual;const cT=[],cA=[];let st=0,sa=0;for(let i=0;i<12;i++){st+=tgt[i];cT.push(+st.toFixed(2));sa+=act[i];cA.push(+sa.toFixed(2));}const mB=Math.max(...tgt,...act,1),mC=Math.max(...cT,...cA,1);mk('cMonthly',{type:'bar',data:{labels,datasets:[{type:'bar',label:t('절감목표','Target'),data:tgt,order:1,backgroundColor:P.grayL,borderColor:P.gray,borderWidth:2,borderRadius:4,yAxisID:'y'},{type:'bar',label:t('절감실적','Actual'),data:act,order:2,backgroundColor:P.red,borderRadius:4,yAxisID:'y'},{type:'line',label:t('누적목표','Cum.Tgt'),data:cT,order:3,borderColor:'rgba(130,130,130,0.95)',backgroundColor:'transparent',borderDash:[6,3],borderWidth:2,pointRadius:5,pointBackgroundColor:'white',pointBorderColor:'rgba(130,130,130,0.95)',pointBorderWidth:2,tension:0.1,yAxisID:'y2'},{type:'line',label:t('누적실적','Cum.Act'),data:cA,order:4,borderColor:P.red,backgroundColor:'transparent',borderWidth:2.5,pointRadius:5,pointBackgroundColor:'white',pointBorderColor:P.red,pointBorderWidth:2,tension:0.1,yAxisID:'y2'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{font:{size:12},boxWidth:14,padding:20}}},scales:{x:{ticks:{font:{size:12}}},y:{beginAtZero:true,position:'left',max:Math.ceil(mB*3),title:{display:true,text:t('월별(억원)','Monthly'),font:{size:12}}},y2:{beginAtZero:true,position:'right',max:Math.ceil(mC*1.3),title:{display:true,text:t('누적(억원)','Cumulative'),font:{size:12}},grid:{drawOnChartArea:false}}}}});}
 function renderAll(){updateKPI();chart_BaseTotal();chart_BaseProduct();chart_InvestTypeTotal();chart_InvestTypeProduct();chart_Activity();chart_Pie();chart_Corp();chart_Monthly();}
 window.onload=function(){initProductFilter();initTypeFilter();initCorpFilter('');initPurposeFilter();applyLang();renderAll();};
+</script><script>
+function confirmLogout(){if(confirm('로그아웃 하시겠습니까?'))window.location.href='/logout';}
 </script></body></html>"""
 
 # ===== LIST TEMPLATE =====
@@ -729,163 +734,170 @@ window.onload=function(){applyLang();initListFilters();renderTable(DATA);}
 </script></body></html>"""
 
 # ===== LOGIN TEMPLATE =====
-LOGIN_TPL = r"""
-<!DOCTYPE html>
+LOGIN_TPL = r"""<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<title>LG전자 창원생산기술실 시스템</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
-
+<title>로그인 | 설비투자 한계돌파 시스템</title>
 <style>
-*{
-  margin:0;
-  padding:0;
-  box-sizing:border-box;
-  font-family:'Noto Sans KR', sans-serif;
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: 'Noto Sans KR', sans-serif;
+    /* 트렌디하고 은은한 배경 그라데이션 (하얀 카드와 대비를 줌) */
+    background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-body{
-  height:100vh;
-  background:linear-gradient(135deg,#f3f4f6,#e5e7eb);
-  display:flex;
-  justify-content:center;
-  align-items:center;
+.login-card {
+    background: #ffffff;
+    border-radius: 30px;
+    padding: 55px 45px;
+    /* 요즘 유행하는 부드럽고 깊은 그림자 효과 */
+    box-shadow: 0 15px 35px rgba(50, 50, 93, 0.1), 0 5px 15px rgba(0, 0, 0, 0.07);
+    text-align: center;
+    width: 100%;
+    max-width: 440px;
 }
 
-.card{
-  width:420px;
-  padding:60px 45px;
-  border-radius:28px;
-  background:rgba(255,255,255,0.85);
-  backdrop-filter: blur(15px);
-  box-shadow:0 30px 80px rgba(0,0,0,0.15);
-  text-align:center;
-  transition:0.4s;
+.logo-area {
+    margin-bottom: 25px;
 }
 
-.card:hover{
-  transform:translateY(-4px);
-  box-shadow:0 40px 90px rgba(0,0,0,0.2);
+.logo-area img {
+    height: 85px;
+    width: auto;
 }
 
-.logo img{
-  width:140px;
-  margin-bottom:30px;
+.system-title {
+    font-size: 25px;
+    font-weight: 700;
+    color: #1a202c; /* 기존보다 조금 더 세련된 진회색 */
+    margin-bottom: 8px;
+    letter-spacing: -1px;
 }
 
-/* 🔴 Welcome back 느낌으로 좌측 정렬 */
-.title{
-  font-size:16px;       /* 조금 작게 */
-  font-weight:500;      /* 살짝 부드럽게 */
-  margin-bottom:25px;
-  color:#666;           /* 회색 */
-  text-align:left;
+.system-subtitle {
+    font-size: 13px;
+    color: #718096;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 40px;
 }
 
-.input-group{
-  margin-bottom:28px;
-  text-align:left;
+.form-group {
+    margin-bottom: 24px;
+    text-align: left;
 }
 
-.input-group label{
-  font-size:13px;
-  font-weight:500;
-  color:#555;
+.form-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 700;
+    color: #4a5568;
+    margin-bottom: 8px;
+    margin-left: 4px;
 }
 
-.input-group input{
-  width:100%;
-  margin-top:8px;
-  padding:14px 14px;
-  border-radius:10px;
-  border:1.5px solid #ddd;
-  font-size:14px;
-  transition:0.3s;
-  background:#fafafa;
+.input-field {
+    width: 100%;
+    padding: 16px 20px;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    font-size: 15px;
+    background: #f7fafc; /* 깔끔하고 연한 배경 */
+    color: #2d3748;
+    transition: all 0.3s ease;
 }
 
-.input-group input:focus{
-  border-color:#a50034;
-  background:white;
-  box-shadow:0 0 0 4px rgba(165,0,52,0.1);
-  outline:none;
+.input-field:focus {
+    outline: none;
+    background: #ffffff;
+    border-color: #a50034; /* LG 브랜드 컬러로 포커스 포인트 */
+    box-shadow: 0 0 0 3px rgba(165, 0, 52, 0.15);
 }
 
-.btn{
-  width:100%;
-  padding:15px;
-  margin-top:10px;
-  border:none;
-  border-radius:12px;
-  background:linear-gradient(90deg,#a50034,#c30045);
-  color:white;
-  font-size:15px;
-  font-weight:600;
-  cursor:pointer;
-  transition:0.3s;
+.login-btn {
+    width: 100%;
+    padding: 18px;
+    border: none;
+    border-radius: 12px;
+    /* 버튼에 고급스러운 LG Red 그라데이션 적용 */
+    background: linear-gradient(135deg, #c0003c 0%, #8a002b 100%);
+    color: white;
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-top: 10px;
+    box-shadow: 0 4px 12px rgba(165, 0, 52, 0.3);
 }
 
-.btn:hover{
-  transform:translateY(-2px);
-  box-shadow:0 8px 20px rgba(165,0,52,0.35);
+.login-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(165, 0, 52, 0.4);
 }
 
-.footer{
-  margin-top:35px;
-  font-size:12px;
-  color:#888;
+.footer-text {
+    margin-top: 45px;
+    font-size: 12px;
+    color: #a0aec0;
 }
 
-.error{
-  color:#d00000;
-  font-size:13px;
-  margin-bottom:20px;
+/* 에러 메시지도 조금 더 시스템 알림창처럼 예쁘게 수정 */
+.error-msg {
+    background: #fff5f5;
+    color: #c53030;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 20px;
+    border: 1px solid #fed7d7;
 }
 </style>
 </head>
-
 <body>
 
-<div class="card">
+<div class="login-card">
+    <div class="logo-area">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/20/LG_symbol.svg/512px-LG_symbol.svg.png" alt="LG Logo">
+    </div>
 
-  <div class="logo">
-    <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/20/LG_symbol.svg/512px-LG_symbol.svg.png" alt="LG 로고">
-  </div>
-
-  <form method="post">
-
-    <div class="title">창원생산기술실 실적 관리 시스템</div>
+    <h1 class="system-title">설비투자 한계돌파 시스템</h1>
+    <p class="system-subtitle">Facility Investment Management</p>
 
     {% if error %}
-    <div class="error">{{ error }}</div>
+    <div class="error-msg">⚠️ {{ error }}</div>
     {% endif %}
 
-    <div class="input-group">
-      <label>아이디</label>
-      <input type="text" name="username" required>
+    <form method="post">
+        <div class="form-group">
+            <label class="form-label">ID (사번)</label>
+            <input type="text" name="username" class="input-field" placeholder="admin" required>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Password</label>
+            <input type="password" name="password" class="input-field" placeholder="••••" required>
+        </div>
+        <button type="submit" class="login-btn">로그인</button>
+    </form>
+
+    <div class="footer-text">
+        © 2024 LG Electronics. Production Tech. Group.
     </div>
-
-    <div class="input-group">
-      <label>비밀번호</label>
-      <input type="password" name="password" required>
-    </div>
-
-    <button type="submit" class="btn">로그인</button>
-
-  </form>
-
-  <div class="footer">
-    © 2026 LG Electronics Changwon Production Technology
-  </div>
-
 </div>
 
 </body>
-</html>
-"""
+</html>"""
 
 if __name__ == "__main__":
     print("🚀 서버 시작: http://127.0.0.1:5000")
